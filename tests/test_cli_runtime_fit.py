@@ -25,3 +25,20 @@ def test_cli_mcp_execute(tmp_path, capsys):
         assert rc2 == 0
     finally:
         cli.PROPOSAL_FILE = old
+
+
+
+def test_cli_mcp_execute_invalid_claude_payload(tmp_path, capsys):
+    old = cli.PROPOSAL_FILE
+    cli.PROPOSAL_FILE = tmp_path / "props.jsonl"
+    try:
+        cli.main(["mcp-propose", "--kind", "claude_plan", "--summary", "s", "--payload", "not-json"])
+        capsys.readouterr()
+        cli.main(["mcp-approve", "--id", "1"])
+        capsys.readouterr()
+        rc = cli.main(["mcp-execute", "--id", "1"])
+        assert rc == 2
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["message"] == "Invalid claude_plan payload JSON"
+    finally:
+        cli.PROPOSAL_FILE = old
