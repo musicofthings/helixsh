@@ -26,14 +26,20 @@ def fit_calibration(observations: list[Observation]) -> FittedCalibration:
     if not observations:
         raise ValueError("at least one observation is required")
 
-    cpu_ratios = [o.observed_cpu / o.expected_cpu for o in observations if o.expected_cpu > 0]
-    mem_ratios = [o.observed_memory_gb / o.expected_memory_gb for o in observations if o.expected_memory_gb > 0]
-    if not cpu_ratios or not mem_ratios:
+    valid_samples = [o for o in observations if o.expected_cpu > 0 and o.expected_memory_gb > 0]
+    if not valid_samples:
         raise ValueError("observations must include positive expected cpu/memory")
+
+    cpu_ratios = [o.observed_cpu / o.expected_cpu for o in valid_samples]
+    mem_ratios = [o.observed_memory_gb / o.expected_memory_gb for o in valid_samples]
 
     cpu_multiplier = sum(cpu_ratios) / len(cpu_ratios)
     memory_multiplier = sum(mem_ratios) / len(mem_ratios)
-    return FittedCalibration(cpu_multiplier=cpu_multiplier, memory_multiplier=memory_multiplier, samples_used=len(observations))
+    return FittedCalibration(
+        cpu_multiplier=cpu_multiplier,
+        memory_multiplier=memory_multiplier,
+        samples_used=len(valid_samples),
+    )
 
 
 def fit_calibration_from_file(path: str) -> FittedCalibration:

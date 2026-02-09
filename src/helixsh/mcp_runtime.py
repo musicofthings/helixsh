@@ -24,7 +24,10 @@ def execute_approved_proposal(store_path: str, proposal_id: int) -> RuntimeResul
         return RuntimeResult(proposal_id=proposal_id, executed=False, message="Proposal is not approved")
 
     if proposal.kind == "claude_plan":
-        details = json.loads(proposal.payload)
+        try:
+            details = json.loads(proposal.payload)
+        except json.JSONDecodeError:
+            return RuntimeResult(proposal_id=proposal_id, executed=False, message="Invalid claude_plan payload JSON")
         return RuntimeResult(
             proposal_id=proposal_id,
             executed=True,
