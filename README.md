@@ -298,6 +298,9 @@ This repository now includes an initial Python CLI implementation:
 - `helixsh cache-report --total 100 --cached 83 --invalidated ALIGN_READS`
 - `helixsh rbac-check --role auditor --action run`
 - `helixsh report --schema-ok --container-policy-ok --cache-percent 95 --diagnostics ok --out validation_report.json`
+- `helixsh profile-suggest --assay wgs --reference GRCh38 --offline`
+- `helixsh provenance --command "nextflow run nf-core/rnaseq" --params "{\"genome\":\"GRCh38\"}"`
+- `helixsh image-check --image ghcr.io/nf-core/rnaseq@sha256:...`
 
 Behavior highlights:
 
@@ -316,6 +319,9 @@ Behavior highlights:
 - Resume/cache summary reporting scaffold
 - RBAC policy scaffold for role/action authorization
 - Validation report artifact generation scaffold
+- Assay/reference profile suggestion scaffold with offline mode hints
+- Reproducible execution hash/provenance record scaffold
+- Container image digest policy checker scaffold
 
 ### Local development
 

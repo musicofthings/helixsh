@@ -29,6 +29,9 @@ from helixsh.diagnostics import diagnose_failure
 from helixsh.cache import summarize_cache
 from helixsh.rbac import check_access
 from helixsh.reporting import build_validation_report, write_report
+from helixsh.profiles import recommend_profile
+from helixsh.provenance import make_provenance_record
+from helixsh.container_policy import check_image_policy
 
 AUDIT_FILE = Path(".helixsh_audit.jsonl")
 
@@ -108,6 +111,19 @@ def make_parser() -> argparse.ArgumentParser:
     report_parser.add_argument("--cache-percent", type=int, default=0)
     report_parser.add_argument("--diagnostics", default="n/a")
     report_parser.add_argument("--out", required=True)
+
+
+    prof_parser = subparsers.add_parser("profile-suggest", help="Suggest pipeline/profile args for assay and reference.")
+    prof_parser.add_argument("--assay", required=True)
+    prof_parser.add_argument("--reference")
+    prof_parser.add_argument("--offline", action="store_true")
+
+    prov_parser = subparsers.add_parser("provenance", help="Generate reproducible execution hash record.")
+    prov_parser.add_argument("--command", dest="plan_command", required=True)
+    prov_parser.add_argument("--params", required=True, help="JSON string of parameters")
+
+    img_parser = subparsers.add_parser("image-check", help="Check container image digest policy.")
+    img_parser.add_argument("--image", required=True)
 
     return parser
 
@@ -277,6 +293,25 @@ def cmd_report(schema_ok: bool, container_policy_ok: bool, cache_percent: int, d
     return 0 if report.status == "pass" else 2
 
 
+def cmd_profile_suggest(assay: str, reference: str | None, offline: bool) -> int:
+    rec = recommend_profile(assay=assay, reference=reference, offline=offline)
+    print(json.dumps(asdict(rec), indent=2))
+    return 0
+
+
+def cmd_provenance(command: str, params_json: str) -> int:
+    params = json.loads(params_json)
+    record = make_provenance_record(command=command, params=params)
+    print(json.dumps(asdict(record), indent=2))
+    return 0
+
+
+def cmd_image_check(image: str) -> int:
+    result = check_image_policy(image)
+    print(json.dumps(asdict(result), indent=2))
+    return 0 if result.allowed else 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = make_parser()
     args = parser.parse_args(argv)
@@ -309,6 +344,12 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_rbac_check(args.role, args.action)
         if args.command == "report":
             return cmd_report(args.schema_ok, args.container_policy_ok, args.cache_percent, args.diagnostics, args.out)
+        if args.command == "profile-suggest":
+            return cmd_profile_suggest(args.assay, args.reference, args.offline)
+        if args.command == "provenance":
+            return cmd_provenance(args.plan_command, args.params)
+        if args.command == "image-check":
+            return cmd_image_check(args.image)
 
         parser.print_help()
         return 0
