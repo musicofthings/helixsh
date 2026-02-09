@@ -311,6 +311,7 @@ This repository now includes an initial Python CLI implementation:
 - `helixsh mcp-proposals`
 - `helixsh mcp-approve --id 1`
 - `helixsh resource-estimate --tool star --assay rnaseq --samples 4`
+- `helixsh posix-wrap nextflow run nf-core/rnaseq`
 
 Behavior highlights:
 
@@ -339,6 +340,7 @@ Behavior highlights:
 - Audit entries now include role + reproducible execution hash + provenance params, with `audit-verify` hash integrity checks
 - MCP proposal workflow scaffold (`mcp-propose`/`mcp-proposals`/`mcp-approve`)
 - Tool-aware resource estimate scaffold for CPU/memory planning
+- Explicit POSIX wrapper renderer/executor (`exec sh -c ...`)
 
 ### Local development
 

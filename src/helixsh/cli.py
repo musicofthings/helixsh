@@ -36,6 +36,7 @@ from helixsh.context import parse_nextflow_config_defaults, summarize_sampleshee
 from helixsh.offline import check_offline_readiness
 from helixsh.gateway import approve_proposal, create_proposal, list_proposals
 from helixsh.resources import estimate_resources
+from helixsh.executor import build_posix_exec, run_posix_exec
 
 AUDIT_FILE = Path(".helixsh_audit.jsonl")
 PROPOSAL_FILE = Path(".helixsh_proposals.jsonl")
@@ -161,6 +162,11 @@ def make_parser() -> argparse.ArgumentParser:
     off_parser = subparsers.add_parser("offline-check", help="Check offline cache readiness.")
     off_parser.add_argument("--cache-root", default=".helixsh_cache")
 
+
+
+    posix_parser = subparsers.add_parser("posix-wrap", help="Render/execute explicit POSIX boundary wrapper.")
+    posix_parser.add_argument("args", nargs="+", help="Command arguments to wrap")
+    posix_parser.add_argument("--execute", action="store_true", help="Execute wrapped command")
 
     pre_parser = subparsers.add_parser("preflight", help="Run combined preflight checks before execution.")
     pre_parser.add_argument("--schema")
@@ -460,6 +466,14 @@ def cmd_offline_check(cache_root: str) -> int:
     return 0 if report.ready else 2
 
 
+def cmd_posix_wrap(args: list[str], execute: bool) -> int:
+    wrapped = build_posix_exec(args)
+    print(wrapped)
+    if execute:
+        return run_posix_exec(args)
+    return 0
+
+
 def cmd_preflight(schema: str | None, params: str | None, workflow: str | None, cache_root: str | None, samplesheet: str | None, config: str | None, image: str | None) -> int:
     checks: dict[str, dict] = {}
 
@@ -552,6 +566,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_offline_check(args.cache_root)
         if args.command == "preflight":
             return cmd_preflight(args.schema, args.params, args.workflow, args.cache_root, args.samplesheet, args.config, args.image)
+        if args.command == "posix-wrap":
+            return cmd_posix_wrap(args.args, args.execute)
 
         parser.print_help()
         return 0
