@@ -24,6 +24,9 @@ from helixsh.nextflow import (
     validate_runtime,
 )
 from helixsh.schema import load_json, validate_params
+from helixsh.workflow import container_violations, parse_process_nodes
+from helixsh.diagnostics import diagnose_failure
+from helixsh.cache import summarize_cache
 
 AUDIT_FILE = Path(".helixsh_audit.jsonl")
 
@@ -78,6 +81,19 @@ def make_parser() -> argparse.ArgumentParser:
 
     export_parser = subparsers.add_parser("audit-export", help="Export audit log with reproducible hash.")
     export_parser.add_argument("--out", required=True)
+
+    wf_parser = subparsers.add_parser("parse-workflow", help="Parse Nextflow process blocks and check container policy.")
+    wf_parser.add_argument("--file", required=True)
+
+    diag_parser = subparsers.add_parser("diagnose", help="Diagnose failed process by exit code.")
+    diag_parser.add_argument("--process", required=True)
+    diag_parser.add_argument("--exit-code", required=True, type=int)
+    diag_parser.add_argument("--memory-gb", type=int)
+
+    cache_parser = subparsers.add_parser("cache-report", help="Summarize cache/resume efficiency.")
+    cache_parser.add_argument("--total", required=True, type=int)
+    cache_parser.add_argument("--cached", required=True, type=int)
+    cache_parser.add_argument("--invalidated", action="append", default=[])
 
     return parser
 
@@ -204,6 +220,31 @@ def cmd_audit_export(out_path: str) -> int:
     return 0
 
 
+def cmd_parse_workflow(file_path: str) -> int:
+    text = Path(file_path).read_text(encoding="utf-8")
+    nodes = parse_process_nodes(text)
+    violations = container_violations(nodes)
+    payload = {
+        "processes": [asdict(n) for n in nodes],
+        "container_policy_ok": len(violations) == 0,
+        "violations": violations,
+    }
+    print(json.dumps(payload, indent=2))
+    return 0 if not violations else 2
+
+
+def cmd_diagnose(process: str, exit_code: int, memory_gb: int | None) -> int:
+    result = diagnose_failure(process, exit_code, memory_gb)
+    print(json.dumps(asdict(result), indent=2))
+    return 0 if exit_code == 0 else 2
+
+
+def cmd_cache_report(total: int, cached: int, invalidated: list[str]) -> int:
+    report = summarize_cache(total, cached, invalidated)
+    print(json.dumps(asdict(report), indent=2))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = make_parser()
     args = parser.parse_args(argv)
@@ -226,6 +267,12 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_mcp_check(args.capability)
         if args.command == "audit-export":
             return cmd_audit_export(args.out)
+        if args.command == "parse-workflow":
+            return cmd_parse_workflow(args.file)
+        if args.command == "diagnose":
+            return cmd_diagnose(args.process, args.exit_code, args.memory_gb)
+        if args.command == "cache-report":
+            return cmd_cache_report(args.total, args.cached, args.invalidated)
 
         parser.print_help()
         return 0

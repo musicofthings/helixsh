@@ -293,6 +293,9 @@ This repository now includes an initial Python CLI implementation:
 - `helixsh validate-schema --schema schema.json --params params.json`
 - `helixsh mcp-check execute_commands`
 - `helixsh audit-export --out audit_export.json`
+- `helixsh parse-workflow --file main.nf`
+- `helixsh diagnose --process QUANTIFY --exit-code 137 --memory-gb 4`
+- `helixsh cache-report --total 100 --cached 83 --invalidated ALIGN_READS`
 
 Behavior highlights:
 
@@ -306,6 +309,9 @@ Behavior highlights:
 - nf-core-style schema validation scaffold (required/type/mutually exclusive checks)
 - MCP gateway capability policy check scaffold
 - Audit export with reproducible SHA-256 digest
+- Nextflow process parsing scaffold + container policy violation detection
+- Failure diagnosis helper for common exit codes (e.g., OOM/137)
+- Resume/cache summary reporting scaffold
 
 ### Local development
 
