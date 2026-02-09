@@ -306,6 +306,7 @@ This repository now includes an initial Python CLI implementation:
 - `helixsh run nf-core rnaseq --offline`
 - `helixsh offline-check --cache-root .helixsh_cache`
 - `helixsh preflight --schema schema.json --params params.json --workflow main.nf --cache-root .helixsh_cache --image ghcr.io/tool@sha256:...`
+- `helixsh audit-verify`
 
 Behavior highlights:
 
@@ -331,6 +332,7 @@ Behavior highlights:
 - Context ingestion scaffold for `samplesheet.csv` and `nextflow.config` defaults
 - Offline-mode readiness checks for cached schemas/containers/assets
 - Combined `preflight` command to run schema/workflow/offline/context/image checks in one report
+- Audit entries now include role + reproducible execution hash, with `audit-verify` integrity checks
 
 ### Local development
 

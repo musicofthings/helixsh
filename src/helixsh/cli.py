@@ -44,6 +44,8 @@ class AuditEvent:
     command: str
     strict: bool
     mode: str
+    role: str
+    execution_hash: str
 
 
 def write_audit(event: AuditEvent) -> None:
@@ -90,6 +92,8 @@ def make_parser() -> argparse.ArgumentParser:
 
     export_parser = subparsers.add_parser("audit-export", help="Export audit log with reproducible hash.")
     export_parser.add_argument("--out", required=True)
+
+    subparsers.add_parser("audit-verify", help="Verify audit log integrity/shape.")
 
     wf_parser = subparsers.add_parser("parse-workflow", help="Parse Nextflow process blocks and check container policy.")
     wf_parser.add_argument("--file", required=True)
@@ -150,7 +154,7 @@ def make_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def cmd_run(args: argparse.Namespace, strict: bool) -> int:
+def cmd_run(args: argparse.Namespace, strict: bool, role: str) -> int:
     if args.target != "nf-core":
         raise HelixshError("Only 'nf-core' target is currently supported in this phase.")
 
@@ -168,7 +172,8 @@ def cmd_run(args: argparse.Namespace, strict: bool) -> int:
     command = build_nextflow_run_command(cfg)
     rendered = format_shell_command(command)
 
-    write_audit(AuditEvent(timestamp=datetime.now(UTC).isoformat(), command=rendered, strict=strict, mode="run"))
+    record = make_provenance_record(command=rendered, params={"pipeline": pipeline, "runtime": runtime, "resume": args.resume, "offline": args.offline})
+    write_audit(AuditEvent(timestamp=datetime.now(UTC).isoformat(), command=rendered, strict=strict, mode="run", role=role, execution_hash=record.execution_hash))
 
     print(f"[helixsh] planned: {rendered}")
     print("[helixsh] execution boundary: POSIX shell / Nextflow")
@@ -210,6 +215,8 @@ def cmd_explain(scope: str) -> int:
     print(f"- timestamp: {event['timestamp']}")
     print(f"- strict:    {event['strict']}")
     print(f"- mode:      {event['mode']}")
+    print(f"- role:      {event.get('role', 'unknown')}")
+    print(f"- hash:      {event.get('execution_hash', 'n/a')}")
     print(f"- command:   {event['command']}")
     return 0
 
@@ -334,6 +341,31 @@ def cmd_image_check(image: str) -> int:
     return 0 if result.allowed else 2
 
 
+def cmd_audit_verify() -> int:
+    if not AUDIT_FILE.exists():
+        print(json.dumps({"ok": False, "reason": "audit file missing"}, indent=2))
+        return 2
+
+    invalid = 0
+    missing_hash = 0
+    lines = 0
+    for raw in AUDIT_FILE.read_text(encoding="utf-8").splitlines():
+        if not raw.strip():
+            continue
+        lines += 1
+        try:
+            event = json.loads(raw)
+        except json.JSONDecodeError:
+            invalid += 1
+            continue
+        if not event.get("execution_hash"):
+            missing_hash += 1
+
+    ok = invalid == 0 and missing_hash == 0 and lines > 0
+    print(json.dumps({"ok": ok, "lines": lines, "invalid_json": invalid, "missing_hash": missing_hash}, indent=2))
+    return 0 if ok else 2
+
+
 def authorize(role: str, action: str | None) -> int:
     if not action:
         return 0
@@ -407,7 +439,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.command == "run":
-            return cmd_run(args, strict=strict)
+            return cmd_run(args, strict=strict, role=getattr(args, "role", "analyst"))
         if args.command == "doctor":
             return cmd_doctor()
         if args.command == "explain":
@@ -422,6 +454,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_mcp_check(args.capability)
         if args.command == "audit-export":
             return cmd_audit_export(args.out)
+        if args.command == "audit-verify":
+            return cmd_audit_verify()
         if args.command == "parse-workflow":
             return cmd_parse_workflow(args.file)
         if args.command == "diagnose":
