@@ -280,3 +280,29 @@ Suitable for clinical genomics, regulated HPC, and enterprise environments.
 ## One-Line Summary
 
 **helixsh** is an AI-native shell that thinks like a bioinformatician, respects POSIX, trusts Nextflow, and treats AI as a planner—not an executor.
+
+## Current Implementation Status (Phase 1 bootstrap)
+
+This repository now includes an initial Python CLI implementation:
+
+- `helixsh run nf-core rnaseq --runtime docker --input samplesheet.csv --resume`
+- `helixsh doctor`
+- `helixsh explain last`
+- `helixsh plan`
+
+Behavior highlights:
+
+- Deterministic Nextflow command generation
+- Runtime validation (Docker/Podman/Singularity/Apptainer)
+- Audit trail written to `.helixsh_audit.jsonl`
+- Dry-run by default; explicit `--execute` required for command execution
+- `--strict` blocks execution unless `--execute` is passed
+
+### Local development
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+pytest
+```
