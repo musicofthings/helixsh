@@ -289,6 +289,10 @@ This repository now includes an initial Python CLI implementation:
 - `helixsh doctor`
 - `helixsh explain last`
 - `helixsh plan`
+- `helixsh intent "run nf-core rnaseq on tumor-normal samples use docker resume"`
+- `helixsh validate-schema --schema schema.json --params params.json`
+- `helixsh mcp-check execute_commands`
+- `helixsh audit-export --out audit_export.json`
 
 Behavior highlights:
 
@@ -298,6 +302,10 @@ Behavior highlights:
 - Dry-run by default; explicit `--execute` required for command execution
 - `--strict` blocks execution unless `--execute` is passed
 - In strict mode, execution also requires explicit `--yes` confirmation
+- Intent parsing scaffold for RNA-seq/WGS/WES/ChIP-seq planning
+- nf-core-style schema validation scaffold (required/type/mutually exclusive checks)
+- MCP gateway capability policy check scaffold
+- Audit export with reproducible SHA-256 digest
 
 ### Local development
 
