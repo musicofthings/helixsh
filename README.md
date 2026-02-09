@@ -332,7 +332,7 @@ Behavior highlights:
 - Context ingestion scaffold for `samplesheet.csv` and `nextflow.config` defaults
 - Offline-mode readiness checks for cached schemas/containers/assets
 - Combined `preflight` command to run schema/workflow/offline/context/image checks in one report
-- Audit entries now include role + reproducible execution hash, with `audit-verify` integrity checks
+- Audit entries now include role + reproducible execution hash + provenance params, with `audit-verify` hash integrity checks
 
 ### Local development
 

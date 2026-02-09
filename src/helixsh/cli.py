@@ -46,6 +46,7 @@ class AuditEvent:
     mode: str
     role: str
     execution_hash: str
+    provenance_params: dict
 
 
 def write_audit(event: AuditEvent) -> None:
@@ -172,8 +173,9 @@ def cmd_run(args: argparse.Namespace, strict: bool, role: str) -> int:
     command = build_nextflow_run_command(cfg)
     rendered = format_shell_command(command)
 
-    record = make_provenance_record(command=rendered, params={"pipeline": pipeline, "runtime": runtime, "resume": args.resume, "offline": args.offline})
-    write_audit(AuditEvent(timestamp=datetime.now(UTC).isoformat(), command=rendered, strict=strict, mode="run", role=role, execution_hash=record.execution_hash))
+    provenance_params = {"pipeline": pipeline, "runtime": runtime, "resume": args.resume, "offline": args.offline}
+    record = make_provenance_record(command=rendered, params=provenance_params)
+    write_audit(AuditEvent(timestamp=datetime.now(UTC).isoformat(), command=rendered, strict=strict, mode="run", role=role, execution_hash=record.execution_hash, provenance_params=provenance_params))
 
     print(f"[helixsh] planned: {rendered}")
     print("[helixsh] execution boundary: POSIX shell / Nextflow")
@@ -217,6 +219,7 @@ def cmd_explain(scope: str) -> int:
     print(f"- mode:      {event['mode']}")
     print(f"- role:      {event.get('role', 'unknown')}")
     print(f"- hash:      {event.get('execution_hash', 'n/a')}")
+    print(f"- params:    {json.dumps(event.get('provenance_params', {}), sort_keys=True)}")
     print(f"- command:   {event['command']}")
     return 0
 
@@ -348,6 +351,7 @@ def cmd_audit_verify() -> int:
 
     invalid = 0
     missing_hash = 0
+    mismatched_hash = 0
     lines = 0
     for raw in AUDIT_FILE.read_text(encoding="utf-8").splitlines():
         if not raw.strip():
@@ -358,11 +362,30 @@ def cmd_audit_verify() -> int:
         except json.JSONDecodeError:
             invalid += 1
             continue
-        if not event.get("execution_hash"):
+        event_hash = event.get("execution_hash")
+        if not event_hash:
             missing_hash += 1
+            continue
+        params = event.get("provenance_params")
+        command = event.get("command")
+        if isinstance(params, dict) and isinstance(command, str):
+            expected = make_provenance_record(command=command, params=params).execution_hash
+            if expected != event_hash:
+                mismatched_hash += 1
 
-    ok = invalid == 0 and missing_hash == 0 and lines > 0
-    print(json.dumps({"ok": ok, "lines": lines, "invalid_json": invalid, "missing_hash": missing_hash}, indent=2))
+    ok = invalid == 0 and missing_hash == 0 and mismatched_hash == 0 and lines > 0
+    print(
+        json.dumps(
+            {
+                "ok": ok,
+                "lines": lines,
+                "invalid_json": invalid,
+                "missing_hash": missing_hash,
+                "mismatched_hash": mismatched_hash,
+            },
+            indent=2,
+        )
+    )
     return 0 if ok else 2
 
 
