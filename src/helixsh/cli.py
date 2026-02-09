@@ -38,6 +38,7 @@ from helixsh.gateway import approve_proposal, create_proposal, list_proposals
 from helixsh.resources import estimate_resources
 from helixsh.executor import build_posix_exec, run_posix_exec
 from helixsh.roadmap import compute_roadmap_status
+from helixsh.signing import sign_file, verify_file_signature
 
 AUDIT_FILE = Path(".helixsh_audit.jsonl")
 PROPOSAL_FILE = Path(".helixsh_proposals.jsonl")
@@ -112,6 +113,14 @@ def make_parser() -> argparse.ArgumentParser:
     export_parser.add_argument("--out", required=True)
 
     subparsers.add_parser("audit-verify", help="Verify audit log integrity/shape.")
+
+    sign_parser = subparsers.add_parser("audit-sign", help="Sign audit log with HMAC key.")
+    sign_parser.add_argument("--key-file", required=True)
+    sign_parser.add_argument("--out", required=True, help="Path to write signature hex")
+
+    verify_sig = subparsers.add_parser("audit-verify-signature", help="Verify audit log signature with HMAC key.")
+    verify_sig.add_argument("--key-file", required=True)
+    verify_sig.add_argument("--signature-file", required=True)
 
     wf_parser = subparsers.add_parser("parse-workflow", help="Parse Nextflow process blocks and check container policy.")
     wf_parser.add_argument("--file", required=True)
@@ -345,6 +354,26 @@ def cmd_audit_export(out_path: str) -> int:
     return 0
 
 
+def cmd_audit_sign(key_file: str, out_path: str) -> int:
+    if not AUDIT_FILE.exists():
+        raise FileNotFoundError(str(AUDIT_FILE))
+    sig = sign_file(str(AUDIT_FILE), key_file)
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(sig + "\n", encoding="utf-8")
+    print(json.dumps({"signature_file": str(out), "signature": sig}, indent=2))
+    return 0
+
+
+def cmd_audit_verify_signature(key_file: str, signature_file: str) -> int:
+    if not AUDIT_FILE.exists():
+        raise FileNotFoundError(str(AUDIT_FILE))
+    expected = Path(signature_file).read_text(encoding="utf-8").strip()
+    ok = verify_file_signature(str(AUDIT_FILE), key_file, expected)
+    print(json.dumps({"ok": ok, "signature_file": signature_file}, indent=2))
+    return 0 if ok else 2
+
+
 def cmd_parse_workflow(file_path: str) -> int:
     text = Path(file_path).read_text(encoding="utf-8")
     nodes = parse_process_nodes(text)
@@ -558,6 +587,10 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_audit_export(args.out)
         if args.command == "audit-verify":
             return cmd_audit_verify()
+        if args.command == "audit-sign":
+            return cmd_audit_sign(args.key_file, args.out)
+        if args.command == "audit-verify-signature":
+            return cmd_audit_verify_signature(args.key_file, args.signature_file)
         if args.command == "parse-workflow":
             return cmd_parse_workflow(args.file)
         if args.command == "diagnose":

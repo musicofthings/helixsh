@@ -307,6 +307,8 @@ This repository now includes an initial Python CLI implementation:
 - `helixsh offline-check --cache-root .helixsh_cache`
 - `helixsh preflight --schema schema.json --params params.json --workflow main.nf --cache-root .helixsh_cache --image ghcr.io/tool@sha256:...`
 - `helixsh audit-verify`
+- `helixsh audit-sign --key-file audit.key --out audit.sig`
+- `helixsh audit-verify-signature --key-file audit.key --signature-file audit.sig`
 - `helixsh mcp-propose --kind file_patch --summary "update config" --payload "..."`
 - `helixsh mcp-proposals`
 - `helixsh mcp-approve --id 1`
@@ -339,6 +341,7 @@ Behavior highlights:
 - Offline-mode readiness checks for cached schemas/containers/assets
 - Combined `preflight` command to run schema/workflow/offline/context/image checks in one report
 - Audit entries now include role + reproducible execution hash + provenance params, with `audit-verify` hash integrity checks
+- HMAC-based audit signature and verification workflow (`audit-sign` / `audit-verify-signature`)
 - MCP proposal workflow scaffold (`mcp-propose`/`mcp-proposals`/`mcp-approve`)
 - Tool-aware resource estimate scaffold for CPU/memory planning
 - Explicit POSIX wrapper renderer/executor (`exec sh -c ...`)

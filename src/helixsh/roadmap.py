@@ -53,15 +53,14 @@ def compute_roadmap_status() -> list[PhaseStatus]:
         ),
         PhaseStatus(
             phase="Phase 4 — Enterprise Hardening",
-            status="in_progress",
+            status="completed",
             completed=(
                 "Offline checks",
                 "RBAC enforcement",
                 "Audit exports and verification",
                 "Validation reports",
-            ),
-            pending=(
                 "Signed audit artifact workflow",
             ),
+            pending=tuple(),
         ),
     ]
