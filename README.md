@@ -363,3 +363,14 @@ source .venv/bin/activate
 pip install -e .
 pytest
 ```
+
+### Package for local deployment
+
+Build a self-contained local executable archive (`.pyz`) and run it directly:
+
+```bash
+./scripts/package_local.sh
+./dist/helixsh.pyz doctor
+```
+
+This packaging flow is self-contained and does not require publishing to PyPI.
