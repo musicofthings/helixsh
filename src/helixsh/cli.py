@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from helixsh.doctor import collect_doctor_results
 from helixsh.nextflow import (
     HelixshError,
     RunConfig,
@@ -51,6 +52,7 @@ def make_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--input", dest="input_file")
     run_parser.add_argument("--resume", action="store_true")
     run_parser.add_argument("--execute", action="store_true", help="Actually execute Nextflow.")
+    run_parser.add_argument("--yes", action="store_true", help="Confirm execution in strict mode.")
     run_parser.add_argument(
         "--nf-arg",
         action="append",
@@ -101,6 +103,10 @@ def cmd_run(args: argparse.Namespace, strict: bool) -> int:
         print("[helixsh] strict mode active: no execution without --execute")
         return 0
 
+    if strict and args.execute and not args.yes:
+        print("[helixsh] strict mode requires explicit confirmation via --yes")
+        return 2
+
     if args.execute:
         completed = subprocess.run(command, check=False)
         return completed.returncode
@@ -110,19 +116,8 @@ def cmd_run(args: argparse.Namespace, strict: bool) -> int:
 
 
 def cmd_doctor() -> int:
-    checks = [
-        ("nextflow", ["nextflow", "-version"]),
-        ("docker", ["docker", "--version"]),
-        ("podman", ["podman", "--version"]),
-        ("singularity", ["singularity", "--version"]),
-        ("apptainer", ["apptainer", "--version"]),
-    ]
-
-    for name, command in checks:
-        result = subprocess.run(command, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        state = "ok" if result.returncode == 0 else "missing"
-        details = (result.stdout.strip() or result.stderr.strip() or "not available").splitlines()[0]
-        print(f"{name:11} {state:7} {details}")
+    for result in collect_doctor_results():
+        print(f"{result.name:11} {result.state:7} {result.details}")
     return 0
 
 
@@ -133,7 +128,11 @@ def cmd_explain(scope: str) -> int:
         print("No previous helixsh audit events found.")
         return 0
 
-    last_line = AUDIT_FILE.read_text(encoding="utf-8").strip().splitlines()[-1]
+    lines = [line for line in AUDIT_FILE.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not lines:
+        print("No previous helixsh audit events found.")
+        return 0
+    last_line = lines[-1]
     event = json.loads(last_line)
     print("Last planned command:")
     print(f"- timestamp: {event['timestamp']}")

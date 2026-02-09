@@ -297,6 +297,7 @@ Behavior highlights:
 - Audit trail written to `.helixsh_audit.jsonl`
 - Dry-run by default; explicit `--execute` required for command execution
 - `--strict` blocks execution unless `--execute` is passed
+- In strict mode, execution also requires explicit `--yes` confirmation
 
 ### Local development
 
