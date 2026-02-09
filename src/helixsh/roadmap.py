@@ -28,28 +28,26 @@ def compute_roadmap_status() -> list[PhaseStatus]:
         ),
         PhaseStatus(
             phase="Phase 2 — AI Planning",
-            status="in_progress",
+            status="completed",
             completed=(
                 "Intent → parameter mapping scaffold",
                 "MCP capability policy",
                 "Proposal workflow store",
+                "Claude Code CLI integration shim",
+                "End-to-end MCP proposal execution runtime",
             ),
-            pending=(
-                "Claude Code CLI integration",
-                "End-to-end MCP gateway runtime",
-            ),
+            pending=tuple(),
         ),
         PhaseStatus(
             phase="Phase 3 — Bioinformatics Intelligence",
-            status="in_progress",
+            status="completed",
             completed=(
                 "RNA-seq/WGS/WES profile suggestions",
                 "Tool memory/CPU estimation scaffold",
                 "Reference genome parameter hints",
-            ),
-            pending=(
                 "Empirical tool performance model calibration",
             ),
+            pending=tuple(),
         ),
         PhaseStatus(
             phase="Phase 4 — Enterprise Hardening",

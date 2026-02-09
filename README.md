@@ -317,6 +317,8 @@ This repository now includes an initial Python CLI implementation:
 - `helixsh roadmap-status`
 - `helixsh claude-plan --prompt "fix schema mismatch"`
 - `helixsh resource-estimate --tool salmon --assay rnaseq --samples 2 --calibration calibration.json`
+- `helixsh fit-calibration --observations observations.json --out calibration.json`
+- `helixsh mcp-execute --id 1`
 
 Behavior highlights:
 
@@ -348,6 +350,8 @@ Behavior highlights:
 - Tool-aware resource estimate scaffold for CPU/memory planning
 - Calibration-aware resource estimation from empirical multipliers
 - Claude-plan proposal shim that stores plan output in MCP proposal workflow
+- MCP approved-proposal runtime execution shim (`mcp-execute`)
+- Empirical calibration fitting command (`fit-calibration`)
 - Explicit POSIX wrapper renderer/executor (`exec sh -c ...`)
 - Machine-readable roadmap status report (`roadmap-status`)
 
