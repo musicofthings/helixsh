@@ -37,6 +37,7 @@ from helixsh.offline import check_offline_readiness
 from helixsh.gateway import approve_proposal, create_proposal, list_proposals
 from helixsh.resources import estimate_resources
 from helixsh.executor import build_posix_exec, run_posix_exec
+from helixsh.roadmap import compute_roadmap_status
 
 AUDIT_FILE = Path(".helixsh_audit.jsonl")
 PROPOSAL_FILE = Path(".helixsh_proposals.jsonl")
@@ -84,6 +85,7 @@ def make_parser() -> argparse.ArgumentParser:
     explain_parser.add_argument("scope", nargs="?", default="last")
 
     subparsers.add_parser("plan", help="Display planning guidance.")
+    subparsers.add_parser("roadmap-status", help="Show roadmap completion status.")
 
     intent_parser = subparsers.add_parser("intent", help="Map natural language intent to Nextflow plan.")
     intent_parser.add_argument("text")
@@ -251,10 +253,22 @@ def cmd_explain(scope: str) -> int:
 
 def cmd_plan() -> int:
     print("helixsh production plan")
-    print("Phase 1: foundation (implemented)")
-    print("Phase 2: AI planning + MCP gateway scaffolding (in progress)")
-    print("Phase 3: bioinformatics intelligence profiles (in progress)")
-    print("Phase 4: enterprise hardening export hooks (in progress)")
+    for phase in compute_roadmap_status():
+        print(f"{phase.phase}: {phase.status}")
+    return 0
+
+
+def cmd_roadmap_status() -> int:
+    phases = compute_roadmap_status()
+    payload = []
+    for p in phases:
+        payload.append({
+            "phase": p.phase,
+            "status": p.status,
+            "completed": list(p.completed),
+            "pending": list(p.pending),
+        })
+    print(json.dumps(payload, indent=2))
     return 0
 
 
@@ -526,6 +540,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_explain(args.scope)
         if args.command == "plan":
             return cmd_plan()
+        if args.command == "roadmap-status":
+            return cmd_roadmap_status()
         if args.command == "intent":
             return cmd_intent(args.text)
         if args.command == "validate-schema":

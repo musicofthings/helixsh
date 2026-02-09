@@ -312,6 +312,7 @@ This repository now includes an initial Python CLI implementation:
 - `helixsh mcp-approve --id 1`
 - `helixsh resource-estimate --tool star --assay rnaseq --samples 4`
 - `helixsh posix-wrap nextflow run nf-core/rnaseq`
+- `helixsh roadmap-status`
 
 Behavior highlights:
 
@@ -341,6 +342,7 @@ Behavior highlights:
 - MCP proposal workflow scaffold (`mcp-propose`/`mcp-proposals`/`mcp-approve`)
 - Tool-aware resource estimate scaffold for CPU/memory planning
 - Explicit POSIX wrapper renderer/executor (`exec sh -c ...`)
+- Machine-readable roadmap status report (`roadmap-status`)
 
 ### Local development
 
