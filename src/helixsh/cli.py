@@ -53,6 +53,7 @@ def write_audit(event: AuditEvent) -> None:
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="helixsh")
     parser.add_argument("--strict", action="store_true", help="Enable strict mode.")
+    parser.add_argument("--role", default="analyst", help="Role used for RBAC authorization checks.")
 
     subparsers = parser.add_subparsers(dest="command", required=False)
 
@@ -312,10 +313,24 @@ def cmd_image_check(image: str) -> int:
     return 0 if result.allowed else 2
 
 
+def authorize(role: str, action: str | None) -> int:
+    if not action:
+        return 0
+    decision = check_access(role, action)
+    if decision.allowed:
+        return 0
+    print(f"helixsh error: role '{decision.role}' is not allowed to run '{decision.action}'", file=sys.stderr)
+    return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = make_parser()
     args = parser.parse_args(argv)
     strict = bool(getattr(args, "strict", False))
+
+    auth_rc = authorize(getattr(args, "role", "analyst"), args.command)
+    if auth_rc != 0:
+        return auth_rc
 
     try:
         if args.command == "run":

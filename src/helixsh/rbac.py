@@ -6,9 +6,9 @@ from dataclasses import dataclass
 
 
 ROLE_PERMISSIONS = {
-    "admin": {"run", "doctor", "explain", "plan", "intent", "validate-schema", "mcp-check", "audit-export", "parse-workflow", "diagnose", "cache-report", "report"},
-    "analyst": {"run", "doctor", "explain", "plan", "intent", "validate-schema", "parse-workflow", "diagnose", "cache-report", "report"},
-    "auditor": {"doctor", "explain", "plan", "mcp-check", "audit-export", "report"},
+    "admin": {"run", "doctor", "explain", "plan", "intent", "validate-schema", "mcp-check", "audit-export", "parse-workflow", "diagnose", "cache-report", "rbac-check", "report", "profile-suggest", "provenance", "image-check"},
+    "analyst": {"run", "doctor", "explain", "plan", "intent", "validate-schema", "mcp-check", "audit-export", "parse-workflow", "diagnose", "cache-report", "rbac-check", "report", "profile-suggest", "provenance", "image-check"},
+    "auditor": {"doctor", "explain", "plan", "mcp-check", "audit-export", "rbac-check", "report", "provenance", "image-check"},
 }
 
 

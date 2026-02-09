@@ -301,6 +301,7 @@ This repository now includes an initial Python CLI implementation:
 - `helixsh profile-suggest --assay wgs --reference GRCh38 --offline`
 - `helixsh provenance --command "nextflow run nf-core/rnaseq" --params "{\"genome\":\"GRCh38\"}"`
 - `helixsh image-check --image ghcr.io/nf-core/rnaseq@sha256:...`
+- `helixsh --role auditor doctor`
 
 Behavior highlights:
 
@@ -322,6 +323,7 @@ Behavior highlights:
 - Assay/reference profile suggestion scaffold with offline mode hints
 - Reproducible execution hash/provenance record scaffold
 - Container image digest policy checker scaffold
+- RBAC enforcement integrated into command execution via global `--role`
 
 ### Local development
 
