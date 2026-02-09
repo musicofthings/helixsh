@@ -6,9 +6,9 @@ from dataclasses import dataclass
 
 
 ROLE_PERMISSIONS = {
-    "admin": {"run", "doctor", "explain", "plan", "intent", "validate-schema", "mcp-check", "audit-export", "audit-verify", "parse-workflow", "diagnose", "cache-report", "rbac-check", "report", "profile-suggest", "provenance", "image-check", "context-check", "offline-check", "preflight"},
-    "analyst": {"run", "doctor", "explain", "plan", "intent", "validate-schema", "mcp-check", "audit-export", "audit-verify", "parse-workflow", "diagnose", "cache-report", "rbac-check", "report", "profile-suggest", "provenance", "image-check", "context-check", "offline-check", "preflight"},
-    "auditor": {"doctor", "explain", "plan", "mcp-check", "audit-export", "audit-verify", "rbac-check", "report", "provenance", "image-check", "context-check", "offline-check", "preflight"},
+    "admin": {"run", "doctor", "explain", "plan", "intent", "validate-schema", "mcp-check", "audit-export", "audit-verify", "parse-workflow", "diagnose", "cache-report", "rbac-check", "report", "profile-suggest", "provenance", "image-check", "context-check", "offline-check", "preflight", "mcp-propose", "mcp-proposals", "mcp-approve", "resource-estimate"},
+    "analyst": {"run", "doctor", "explain", "plan", "intent", "validate-schema", "mcp-check", "audit-export", "audit-verify", "parse-workflow", "diagnose", "cache-report", "rbac-check", "report", "profile-suggest", "provenance", "image-check", "context-check", "offline-check", "preflight", "mcp-propose", "mcp-proposals", "mcp-approve", "resource-estimate"},
+    "auditor": {"doctor", "explain", "plan", "mcp-check", "audit-export", "audit-verify", "rbac-check", "report", "provenance", "image-check", "context-check", "offline-check", "preflight", "mcp-propose", "mcp-proposals", "mcp-approve", "resource-estimate"},
 }
 
 

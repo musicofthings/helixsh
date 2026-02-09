@@ -34,8 +34,11 @@ from helixsh.provenance import make_provenance_record
 from helixsh.container_policy import check_image_policy
 from helixsh.context import parse_nextflow_config_defaults, summarize_samplesheet
 from helixsh.offline import check_offline_readiness
+from helixsh.gateway import approve_proposal, create_proposal, list_proposals
+from helixsh.resources import estimate_resources
 
 AUDIT_FILE = Path(".helixsh_audit.jsonl")
+PROPOSAL_FILE = Path(".helixsh_proposals.jsonl")
 
 
 @dataclass(frozen=True)
@@ -91,6 +94,17 @@ def make_parser() -> argparse.ArgumentParser:
     mcp_parser = subparsers.add_parser("mcp-check", help="Check MCP gateway capability policy.")
     mcp_parser.add_argument("capability")
 
+
+    mcp_prop = subparsers.add_parser("mcp-propose", help="Store an MCP proposal for review.")
+    mcp_prop.add_argument("--kind", required=True)
+    mcp_prop.add_argument("--summary", required=True)
+    mcp_prop.add_argument("--payload", required=True)
+
+    subparsers.add_parser("mcp-proposals", help="List MCP proposals.")
+
+    mcp_appr = subparsers.add_parser("mcp-approve", help="Approve an MCP proposal by id.")
+    mcp_appr.add_argument("--id", required=True, type=int)
+
     export_parser = subparsers.add_parser("audit-export", help="Export audit log with reproducible hash.")
     export_parser.add_argument("--out", required=True)
 
@@ -121,6 +135,11 @@ def make_parser() -> argparse.ArgumentParser:
     report_parser.add_argument("--diagnostics", default="n/a")
     report_parser.add_argument("--out", required=True)
 
+
+    res_parser = subparsers.add_parser("resource-estimate", help="Estimate CPU/memory for tool + assay + samples.")
+    res_parser.add_argument("--tool", required=True)
+    res_parser.add_argument("--assay", required=True)
+    res_parser.add_argument("--samples", required=True, type=int)
 
     prof_parser = subparsers.add_parser("profile-suggest", help="Suggest pipeline/profile args for assay and reference.")
     prof_parser.add_argument("--assay", required=True)
@@ -264,6 +283,30 @@ def cmd_mcp_check(capability: str) -> int:
     decision = evaluate_capability(capability)
     print(json.dumps(asdict(decision), indent=2))
     return 0 if decision.allowed else 2
+
+
+def cmd_mcp_propose(kind: str, summary: str, payload: str) -> int:
+    proposal = create_proposal(str(PROPOSAL_FILE), kind=kind, summary=summary, payload=payload)
+    print(json.dumps(asdict(proposal), indent=2))
+    return 0
+
+
+def cmd_mcp_proposals() -> int:
+    proposals = list_proposals(str(PROPOSAL_FILE))
+    print(json.dumps([asdict(p) for p in proposals], indent=2))
+    return 0
+
+
+def cmd_mcp_approve(proposal_id: int) -> int:
+    proposal = approve_proposal(str(PROPOSAL_FILE), proposal_id=proposal_id)
+    print(json.dumps(asdict(proposal), indent=2))
+    return 0
+
+
+def cmd_resource_estimate(tool: str, assay: str, samples: int) -> int:
+    estimate = estimate_resources(tool=tool, assay=assay, samples=samples)
+    print(json.dumps(asdict(estimate), indent=2))
+    return 0
 
 
 def cmd_audit_export(out_path: str) -> int:
@@ -475,6 +518,12 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_validate_schema(args.schema, args.params)
         if args.command == "mcp-check":
             return cmd_mcp_check(args.capability)
+        if args.command == "mcp-propose":
+            return cmd_mcp_propose(args.kind, args.summary, args.payload)
+        if args.command == "mcp-proposals":
+            return cmd_mcp_proposals()
+        if args.command == "mcp-approve":
+            return cmd_mcp_approve(args.id)
         if args.command == "audit-export":
             return cmd_audit_export(args.out)
         if args.command == "audit-verify":
@@ -489,6 +538,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_rbac_check(args.role, args.action)
         if args.command == "report":
             return cmd_report(args.schema_ok, args.container_policy_ok, args.cache_percent, args.diagnostics, args.out)
+        if args.command == "resource-estimate":
+            return cmd_resource_estimate(args.tool, args.assay, args.samples)
         if args.command == "profile-suggest":
             return cmd_profile_suggest(args.assay, args.reference, args.offline)
         if args.command == "provenance":
@@ -504,7 +555,7 @@ def main(argv: list[str] | None = None) -> int:
 
         parser.print_help()
         return 0
-    except (HelixshError, FileNotFoundError, json.JSONDecodeError) as exc:
+    except (HelixshError, FileNotFoundError, json.JSONDecodeError, ValueError) as exc:
         print(f"helixsh error: {exc}", file=sys.stderr)
         return 2
 
