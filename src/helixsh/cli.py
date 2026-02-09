@@ -27,6 +27,8 @@ from helixsh.schema import load_json, validate_params
 from helixsh.workflow import container_violations, parse_process_nodes
 from helixsh.diagnostics import diagnose_failure
 from helixsh.cache import summarize_cache
+from helixsh.rbac import check_access
+from helixsh.reporting import build_validation_report, write_report
 
 AUDIT_FILE = Path(".helixsh_audit.jsonl")
 
@@ -94,6 +96,18 @@ def make_parser() -> argparse.ArgumentParser:
     cache_parser.add_argument("--total", required=True, type=int)
     cache_parser.add_argument("--cached", required=True, type=int)
     cache_parser.add_argument("--invalidated", action="append", default=[])
+
+
+    rbac_parser = subparsers.add_parser("rbac-check", help="Check role-based access for an action.")
+    rbac_parser.add_argument("--role", required=True)
+    rbac_parser.add_argument("--action", required=True)
+
+    report_parser = subparsers.add_parser("report", help="Generate validation report artifact.")
+    report_parser.add_argument("--schema-ok", action="store_true")
+    report_parser.add_argument("--container-policy-ok", action="store_true")
+    report_parser.add_argument("--cache-percent", type=int, default=0)
+    report_parser.add_argument("--diagnostics", default="n/a")
+    report_parser.add_argument("--out", required=True)
 
     return parser
 
@@ -245,6 +259,24 @@ def cmd_cache_report(total: int, cached: int, invalidated: list[str]) -> int:
     return 0
 
 
+def cmd_rbac_check(role: str, action: str) -> int:
+    decision = check_access(role, action)
+    print(json.dumps(asdict(decision), indent=2))
+    return 0 if decision.allowed else 2
+
+
+def cmd_report(schema_ok: bool, container_policy_ok: bool, cache_percent: int, diagnostics: str, out: str) -> int:
+    report = build_validation_report(
+        schema_ok=schema_ok,
+        container_policy_ok=container_policy_ok,
+        cache_percent=cache_percent,
+        diagnostics=diagnostics,
+    )
+    write_report(report, out)
+    print(f"validation report written: {out}")
+    return 0 if report.status == "pass" else 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = make_parser()
     args = parser.parse_args(argv)
@@ -273,6 +305,10 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_diagnose(args.process, args.exit_code, args.memory_gb)
         if args.command == "cache-report":
             return cmd_cache_report(args.total, args.cached, args.invalidated)
+        if args.command == "rbac-check":
+            return cmd_rbac_check(args.role, args.action)
+        if args.command == "report":
+            return cmd_report(args.schema_ok, args.container_policy_ok, args.cache_percent, args.diagnostics, args.out)
 
         parser.print_help()
         return 0

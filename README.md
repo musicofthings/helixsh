@@ -296,6 +296,8 @@ This repository now includes an initial Python CLI implementation:
 - `helixsh parse-workflow --file main.nf`
 - `helixsh diagnose --process QUANTIFY --exit-code 137 --memory-gb 4`
 - `helixsh cache-report --total 100 --cached 83 --invalidated ALIGN_READS`
+- `helixsh rbac-check --role auditor --action run`
+- `helixsh report --schema-ok --container-policy-ok --cache-percent 95 --diagnostics ok --out validation_report.json`
 
 Behavior highlights:
 
@@ -312,6 +314,8 @@ Behavior highlights:
 - Nextflow process parsing scaffold + container policy violation detection
 - Failure diagnosis helper for common exit codes (e.g., OOM/137)
 - Resume/cache summary reporting scaffold
+- RBAC policy scaffold for role/action authorization
+- Validation report artifact generation scaffold
 
 ### Local development
 
