@@ -39,6 +39,8 @@ from helixsh.resources import estimate_resources
 from helixsh.executor import build_posix_exec, run_posix_exec
 from helixsh.roadmap import compute_roadmap_status
 from helixsh.signing import sign_file, verify_file_signature
+from helixsh.calibration import load_calibration
+from helixsh.claude_cli import generate_plan
 
 AUDIT_FILE = Path(".helixsh_audit.jsonl")
 PROPOSAL_FILE = Path(".helixsh_proposals.jsonl")
@@ -109,6 +111,9 @@ def make_parser() -> argparse.ArgumentParser:
     mcp_appr = subparsers.add_parser("mcp-approve", help="Approve an MCP proposal by id.")
     mcp_appr.add_argument("--id", required=True, type=int)
 
+    claude_parser = subparsers.add_parser("claude-plan", help="Generate a Claude-style plan proposal and store it.")
+    claude_parser.add_argument("--prompt", required=True)
+
     export_parser = subparsers.add_parser("audit-export", help="Export audit log with reproducible hash.")
     export_parser.add_argument("--out", required=True)
 
@@ -152,6 +157,7 @@ def make_parser() -> argparse.ArgumentParser:
     res_parser.add_argument("--tool", required=True)
     res_parser.add_argument("--assay", required=True)
     res_parser.add_argument("--samples", required=True, type=int)
+    res_parser.add_argument("--calibration", help="Path to calibration JSON with cpu/memory multipliers")
 
     prof_parser = subparsers.add_parser("profile-suggest", help="Suggest pipeline/profile args for assay and reference.")
     prof_parser.add_argument("--assay", required=True)
@@ -326,14 +332,29 @@ def cmd_mcp_proposals() -> int:
     return 0
 
 
+def cmd_claude_plan(prompt: str) -> int:
+    plan = generate_plan(prompt)
+    payload = json.dumps(asdict(plan), ensure_ascii=False)
+    proposal = create_proposal(str(PROPOSAL_FILE), kind="claude_plan", summary=plan.proposed_diff_summary, payload=payload)
+    print(json.dumps({"plan": asdict(plan), "proposal": asdict(proposal)}, indent=2))
+    return 0
+
+
+
 def cmd_mcp_approve(proposal_id: int) -> int:
     proposal = approve_proposal(str(PROPOSAL_FILE), proposal_id=proposal_id)
     print(json.dumps(asdict(proposal), indent=2))
     return 0
 
 
-def cmd_resource_estimate(tool: str, assay: str, samples: int) -> int:
-    estimate = estimate_resources(tool=tool, assay=assay, samples=samples)
+def cmd_resource_estimate(tool: str, assay: str, samples: int, calibration: str | None) -> int:
+    cpu_mult = 1.0
+    mem_mult = 1.0
+    if calibration:
+        c = load_calibration(calibration)
+        cpu_mult = c.cpu_multiplier
+        mem_mult = c.memory_multiplier
+    estimate = estimate_resources(tool=tool, assay=assay, samples=samples, cpu_multiplier=cpu_mult, memory_multiplier=mem_mult)
     print(json.dumps(asdict(estimate), indent=2))
     return 0
 
@@ -583,6 +604,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_mcp_proposals()
         if args.command == "mcp-approve":
             return cmd_mcp_approve(args.id)
+        if args.command == "claude-plan":
+            return cmd_claude_plan(args.prompt)
         if args.command == "audit-export":
             return cmd_audit_export(args.out)
         if args.command == "audit-verify":
@@ -602,7 +625,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "report":
             return cmd_report(args.schema_ok, args.container_policy_ok, args.cache_percent, args.diagnostics, args.out)
         if args.command == "resource-estimate":
-            return cmd_resource_estimate(args.tool, args.assay, args.samples)
+            return cmd_resource_estimate(args.tool, args.assay, args.samples, args.calibration)
         if args.command == "profile-suggest":
             return cmd_profile_suggest(args.assay, args.reference, args.offline)
         if args.command == "provenance":

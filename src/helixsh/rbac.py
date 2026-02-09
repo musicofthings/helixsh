@@ -6,9 +6,9 @@ from dataclasses import dataclass
 
 
 ROLE_PERMISSIONS = {
-    "admin": {"run", "doctor", "explain", "plan", "intent", "validate-schema", "mcp-check", "audit-export", "audit-verify", "audit-sign", "audit-verify-signature", "parse-workflow", "diagnose", "cache-report", "rbac-check", "report", "profile-suggest", "provenance", "image-check", "context-check", "offline-check", "preflight", "mcp-propose", "mcp-proposals", "mcp-approve", "resource-estimate", "posix-wrap", "roadmap-status"},
-    "analyst": {"run", "doctor", "explain", "plan", "intent", "validate-schema", "mcp-check", "audit-export", "audit-verify", "audit-sign", "audit-verify-signature", "parse-workflow", "diagnose", "cache-report", "rbac-check", "report", "profile-suggest", "provenance", "image-check", "context-check", "offline-check", "preflight", "mcp-propose", "mcp-proposals", "mcp-approve", "resource-estimate", "posix-wrap", "roadmap-status"},
-    "auditor": {"doctor", "explain", "plan", "mcp-check", "audit-export", "audit-verify", "audit-sign", "audit-verify-signature", "rbac-check", "report", "provenance", "image-check", "context-check", "offline-check", "preflight", "mcp-propose", "mcp-proposals", "mcp-approve", "resource-estimate", "posix-wrap", "roadmap-status"},
+    "admin": {"run", "doctor", "explain", "plan", "intent", "validate-schema", "mcp-check", "audit-export", "audit-verify", "audit-sign", "audit-verify-signature", "parse-workflow", "diagnose", "cache-report", "rbac-check", "report", "profile-suggest", "provenance", "image-check", "context-check", "offline-check", "preflight", "mcp-propose", "mcp-proposals", "mcp-approve", "claude-plan", "resource-estimate", "posix-wrap", "roadmap-status"},
+    "analyst": {"run", "doctor", "explain", "plan", "intent", "validate-schema", "mcp-check", "audit-export", "audit-verify", "audit-sign", "audit-verify-signature", "parse-workflow", "diagnose", "cache-report", "rbac-check", "report", "profile-suggest", "provenance", "image-check", "context-check", "offline-check", "preflight", "mcp-propose", "mcp-proposals", "mcp-approve", "claude-plan", "resource-estimate", "posix-wrap", "roadmap-status"},
+    "auditor": {"doctor", "explain", "plan", "mcp-check", "audit-export", "audit-verify", "audit-sign", "audit-verify-signature", "rbac-check", "report", "provenance", "image-check", "context-check", "offline-check", "preflight", "mcp-propose", "mcp-proposals", "mcp-approve", "claude-plan", "resource-estimate", "posix-wrap", "roadmap-status"},
 }
 
 

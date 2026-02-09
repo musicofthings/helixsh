@@ -24,7 +24,7 @@ DEFAULTS = {
 }
 
 
-def estimate_resources(tool: str, assay: str, samples: int) -> ResourceEstimate:
+def estimate_resources(tool: str, assay: str, samples: int, cpu_multiplier: float = 1.0, memory_multiplier: float = 1.0) -> ResourceEstimate:
     tool_norm = tool.strip().lower()
     assay_norm = assay.strip().lower()
     if samples <= 0:
@@ -37,12 +37,15 @@ def estimate_resources(tool: str, assay: str, samples: int) -> ResourceEstimate:
     if assay_norm == "rnaseq" and tool_norm == "star":
         mem += 8
 
+    cpu_adj = max(1, int(round(cpu * cpu_multiplier)))
+    mem_adj = max(1, int(round(mem * memory_multiplier)))
+
     return ResourceEstimate(
         tool=tool_norm,
         assay=assay_norm,
         samples=samples,
-        cpu_per_sample=cpu,
-        memory_gb_per_sample=mem,
-        total_cpu=cpu * samples,
-        total_memory_gb=mem * samples,
+        cpu_per_sample=cpu_adj,
+        memory_gb_per_sample=mem_adj,
+        total_cpu=cpu_adj * samples,
+        total_memory_gb=mem_adj * samples,
     )

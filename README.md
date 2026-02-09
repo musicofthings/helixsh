@@ -315,6 +315,8 @@ This repository now includes an initial Python CLI implementation:
 - `helixsh resource-estimate --tool star --assay rnaseq --samples 4`
 - `helixsh posix-wrap nextflow run nf-core/rnaseq`
 - `helixsh roadmap-status`
+- `helixsh claude-plan --prompt "fix schema mismatch"`
+- `helixsh resource-estimate --tool salmon --assay rnaseq --samples 2 --calibration calibration.json`
 
 Behavior highlights:
 
@@ -344,6 +346,8 @@ Behavior highlights:
 - HMAC-based audit signature and verification workflow (`audit-sign` / `audit-verify-signature`)
 - MCP proposal workflow scaffold (`mcp-propose`/`mcp-proposals`/`mcp-approve`)
 - Tool-aware resource estimate scaffold for CPU/memory planning
+- Calibration-aware resource estimation from empirical multipliers
+- Claude-plan proposal shim that stores plan output in MCP proposal workflow
 - Explicit POSIX wrapper renderer/executor (`exec sh -c ...`)
 - Machine-readable roadmap status report (`roadmap-status`)
 
