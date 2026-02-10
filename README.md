@@ -326,7 +326,7 @@ Behavior highlights:
 - Runtime validation (Docker/Podman/Singularity/Apptainer)
 - Audit trail written to `.helixsh_audit.jsonl`
 - Dry-run by default; explicit `--execute` required for command execution
-- `--strict` blocks execution unless `--execute` is passed (accepted both before and after subcommands, e.g. `helixsh --strict run ...` or `helixsh run --strict ...`)
+- `--strict` blocks execution unless `--execute` is passed
 - In strict mode, execution also requires explicit `--yes` confirmation
 - Intent parsing scaffold for RNA-seq/WGS/WES/ChIP-seq planning
 - nf-core-style schema validation scaffold (required/type/mutually exclusive checks)
@@ -373,4 +373,4 @@ Build a self-contained local executable archive (`.pyz`) and run it directly:
 ./dist/helixsh.pyz doctor
 ```
 
-This packaging flow is self-contained, preserves CLI exit codes, and does not require publishing to PyPI.
+This packaging flow is self-contained and does not require publishing to PyPI.

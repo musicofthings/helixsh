@@ -48,15 +48,3 @@ def test_explain_last_handles_empty_audit(capsys, tmp_path):
         assert "No previous helixsh audit events found" in capsys.readouterr().out
     finally:
         cli.AUDIT_FILE = old
-
-
-def test_strict_after_subcommand_is_accepted(capsys, tmp_path):
-    old = cli.AUDIT_FILE
-    cli.AUDIT_FILE = tmp_path / "audit.jsonl"
-    try:
-        rc = cli.main(["run", "--strict", "nf-core", "rnaseq"])
-        assert rc == 0
-        out = capsys.readouterr().out
-        assert "strict mode active" in out
-    finally:
-        cli.AUDIT_FILE = old

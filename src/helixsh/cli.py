@@ -67,17 +67,12 @@ def write_audit(event: AuditEvent) -> None:
 
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="helixsh")
-    parser.add_argument("--strict", dest="global_strict", action="store_true", help="Enable strict mode.")
+    parser.add_argument("--strict", action="store_true", help="Enable strict mode.")
     parser.add_argument("--role", default="analyst", help="Role used for RBAC authorization checks.")
 
     subparsers = parser.add_subparsers(dest="command", required=False)
 
-    def add_command_parser(name: str, **kwargs: object) -> argparse.ArgumentParser:
-        cmd_parser = subparsers.add_parser(name, **kwargs)
-        cmd_parser.add_argument("--strict", action="store_true", help="Enable strict mode.")
-        return cmd_parser
-
-    run_parser = add_command_parser("run", help="Run an nf-core pipeline via Nextflow.")
+    run_parser = subparsers.add_parser("run", help="Run an nf-core pipeline via Nextflow.")
     run_parser.add_argument("target", nargs="?", default="nf-core")
     run_parser.add_argument("pipeline", nargs="?", default="rnaseq")
     run_parser.add_argument("--org", default="nf-core")
@@ -89,73 +84,73 @@ def make_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--yes", action="store_true", help="Confirm execution in strict mode.")
     run_parser.add_argument("--nf-arg", action="append", default=[], help="Extra argument passed directly to Nextflow (repeatable).")
 
-    add_command_parser("doctor", help="Show environment diagnostics.")
+    subparsers.add_parser("doctor", help="Show environment diagnostics.")
 
-    explain_parser = add_command_parser("explain", help="Explain latest command plan.")
+    explain_parser = subparsers.add_parser("explain", help="Explain latest command plan.")
     explain_parser.add_argument("scope", nargs="?", default="last")
 
-    add_command_parser("plan", help="Display planning guidance.")
-    add_command_parser("roadmap-status", help="Show roadmap completion status.")
+    subparsers.add_parser("plan", help="Display planning guidance.")
+    subparsers.add_parser("roadmap-status", help="Show roadmap completion status.")
 
-    intent_parser = add_command_parser("intent", help="Map natural language intent to Nextflow plan.")
+    intent_parser = subparsers.add_parser("intent", help="Map natural language intent to Nextflow plan.")
     intent_parser.add_argument("text")
 
-    schema_parser = add_command_parser("validate-schema", help="Validate params against nf-core style schema JSON.")
+    schema_parser = subparsers.add_parser("validate-schema", help="Validate params against nf-core style schema JSON.")
     schema_parser.add_argument("--schema", required=True)
     schema_parser.add_argument("--params", required=True)
 
-    mcp_parser = add_command_parser("mcp-check", help="Check MCP gateway capability policy.")
+    mcp_parser = subparsers.add_parser("mcp-check", help="Check MCP gateway capability policy.")
     mcp_parser.add_argument("capability")
 
 
-    mcp_prop = add_command_parser("mcp-propose", help="Store an MCP proposal for review.")
+    mcp_prop = subparsers.add_parser("mcp-propose", help="Store an MCP proposal for review.")
     mcp_prop.add_argument("--kind", required=True)
     mcp_prop.add_argument("--summary", required=True)
     mcp_prop.add_argument("--payload", required=True)
 
-    add_command_parser("mcp-proposals", help="List MCP proposals.")
+    subparsers.add_parser("mcp-proposals", help="List MCP proposals.")
 
-    mcp_appr = add_command_parser("mcp-approve", help="Approve an MCP proposal by id.")
+    mcp_appr = subparsers.add_parser("mcp-approve", help="Approve an MCP proposal by id.")
     mcp_appr.add_argument("--id", required=True, type=int)
 
-    claude_parser = add_command_parser("claude-plan", help="Generate a Claude-style plan proposal and store it.")
+    claude_parser = subparsers.add_parser("claude-plan", help="Generate a Claude-style plan proposal and store it.")
     claude_parser.add_argument("--prompt", required=True)
 
-    mcp_exec = add_command_parser("mcp-execute", help="Execute an approved MCP proposal.")
+    mcp_exec = subparsers.add_parser("mcp-execute", help="Execute an approved MCP proposal.")
     mcp_exec.add_argument("--id", required=True, type=int)
 
-    export_parser = add_command_parser("audit-export", help="Export audit log with reproducible hash.")
+    export_parser = subparsers.add_parser("audit-export", help="Export audit log with reproducible hash.")
     export_parser.add_argument("--out", required=True)
 
-    add_command_parser("audit-verify", help="Verify audit log integrity/shape.")
+    subparsers.add_parser("audit-verify", help="Verify audit log integrity/shape.")
 
-    sign_parser = add_command_parser("audit-sign", help="Sign audit log with HMAC key.")
+    sign_parser = subparsers.add_parser("audit-sign", help="Sign audit log with HMAC key.")
     sign_parser.add_argument("--key-file", required=True)
     sign_parser.add_argument("--out", required=True, help="Path to write signature hex")
 
-    verify_sig = add_command_parser("audit-verify-signature", help="Verify audit log signature with HMAC key.")
+    verify_sig = subparsers.add_parser("audit-verify-signature", help="Verify audit log signature with HMAC key.")
     verify_sig.add_argument("--key-file", required=True)
     verify_sig.add_argument("--signature-file", required=True)
 
-    wf_parser = add_command_parser("parse-workflow", help="Parse Nextflow process blocks and check container policy.")
+    wf_parser = subparsers.add_parser("parse-workflow", help="Parse Nextflow process blocks and check container policy.")
     wf_parser.add_argument("--file", required=True)
 
-    diag_parser = add_command_parser("diagnose", help="Diagnose failed process by exit code.")
+    diag_parser = subparsers.add_parser("diagnose", help="Diagnose failed process by exit code.")
     diag_parser.add_argument("--process", required=True)
     diag_parser.add_argument("--exit-code", required=True, type=int)
     diag_parser.add_argument("--memory-gb", type=int)
 
-    cache_parser = add_command_parser("cache-report", help="Summarize cache/resume efficiency.")
+    cache_parser = subparsers.add_parser("cache-report", help="Summarize cache/resume efficiency.")
     cache_parser.add_argument("--total", required=True, type=int)
     cache_parser.add_argument("--cached", required=True, type=int)
     cache_parser.add_argument("--invalidated", action="append", default=[])
 
 
-    rbac_parser = add_command_parser("rbac-check", help="Check role-based access for an action.")
+    rbac_parser = subparsers.add_parser("rbac-check", help="Check role-based access for an action.")
     rbac_parser.add_argument("--role", required=True)
     rbac_parser.add_argument("--action", required=True)
 
-    report_parser = add_command_parser("report", help="Generate validation report artifact.")
+    report_parser = subparsers.add_parser("report", help="Generate validation report artifact.")
     report_parser.add_argument("--schema-ok", action="store_true")
     report_parser.add_argument("--container-policy-ok", action="store_true")
     report_parser.add_argument("--cache-percent", type=int, default=0)
@@ -163,43 +158,43 @@ def make_parser() -> argparse.ArgumentParser:
     report_parser.add_argument("--out", required=True)
 
 
-    res_parser = add_command_parser("resource-estimate", help="Estimate CPU/memory for tool + assay + samples.")
+    res_parser = subparsers.add_parser("resource-estimate", help="Estimate CPU/memory for tool + assay + samples.")
     res_parser.add_argument("--tool", required=True)
     res_parser.add_argument("--assay", required=True)
     res_parser.add_argument("--samples", required=True, type=int)
     res_parser.add_argument("--calibration", help="Path to calibration JSON with cpu/memory multipliers")
 
-    fit_parser = add_command_parser("fit-calibration", help="Fit calibration multipliers from observation JSON.")
+    fit_parser = subparsers.add_parser("fit-calibration", help="Fit calibration multipliers from observation JSON.")
     fit_parser.add_argument("--observations", required=True)
     fit_parser.add_argument("--out", required=True)
 
-    prof_parser = add_command_parser("profile-suggest", help="Suggest pipeline/profile args for assay and reference.")
+    prof_parser = subparsers.add_parser("profile-suggest", help="Suggest pipeline/profile args for assay and reference.")
     prof_parser.add_argument("--assay", required=True)
     prof_parser.add_argument("--reference")
     prof_parser.add_argument("--offline", action="store_true")
 
-    prov_parser = add_command_parser("provenance", help="Generate reproducible execution hash record.")
+    prov_parser = subparsers.add_parser("provenance", help="Generate reproducible execution hash record.")
     prov_parser.add_argument("--command", dest="plan_command", required=True)
     prov_parser.add_argument("--params", required=True, help="JSON string of parameters")
 
-    img_parser = add_command_parser("image-check", help="Check container image digest policy.")
+    img_parser = subparsers.add_parser("image-check", help="Check container image digest policy.")
     img_parser.add_argument("--image", required=True)
 
 
-    ctx_parser = add_command_parser("context-check", help="Summarize samplesheet and nextflow.config defaults.")
+    ctx_parser = subparsers.add_parser("context-check", help="Summarize samplesheet and nextflow.config defaults.")
     ctx_parser.add_argument("--samplesheet")
     ctx_parser.add_argument("--config")
 
-    off_parser = add_command_parser("offline-check", help="Check offline cache readiness.")
+    off_parser = subparsers.add_parser("offline-check", help="Check offline cache readiness.")
     off_parser.add_argument("--cache-root", default=".helixsh_cache")
 
 
 
-    posix_parser = add_command_parser("posix-wrap", help="Render/execute explicit POSIX boundary wrapper.")
+    posix_parser = subparsers.add_parser("posix-wrap", help="Render/execute explicit POSIX boundary wrapper.")
     posix_parser.add_argument("args", nargs="+", help="Command arguments to wrap")
     posix_parser.add_argument("--execute", action="store_true", help="Execute wrapped command")
 
-    pre_parser = add_command_parser("preflight", help="Run combined preflight checks before execution.")
+    pre_parser = subparsers.add_parser("preflight", help="Run combined preflight checks before execution.")
     pre_parser.add_argument("--schema")
     pre_parser.add_argument("--params")
     pre_parser.add_argument("--workflow")
@@ -603,7 +598,7 @@ def cmd_preflight(schema: str | None, params: str | None, workflow: str | None, 
 def main(argv: list[str] | None = None) -> int:
     parser = make_parser()
     args = parser.parse_args(argv)
-    strict = bool(getattr(args, "global_strict", False) or getattr(args, "strict", False))
+    strict = bool(getattr(args, "strict", False))
 
     auth_rc = authorize(getattr(args, "role", "analyst"), args.command)
     if auth_rc != 0:
