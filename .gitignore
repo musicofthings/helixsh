@@ -1,0 +1,17 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+.venv/
+
+.helixsh_audit.jsonl
+.helixsh_proposals.jsonl
+
+# Local packaging/output artifacts
+build/
+dist/
+*.egg-info/
+helixsh-complete.zip
+helixsh-complete.tar.gz
+helixsh-complete.bundle
+
+.helixsh/
