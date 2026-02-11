@@ -319,14 +319,6 @@ This repository now includes an initial Python CLI implementation:
 - `helixsh resource-estimate --tool salmon --assay rnaseq --samples 2 --calibration calibration.json`
 - `helixsh fit-calibration --observations observations.json --out calibration.json`
 - `helixsh mcp-execute --id 1`
-- `helixsh db-init --db .helixsh/db.sqlite`
-- `helixsh execution-start --command "nextflow run nf-core/rnaseq" --workflow nf-core/rnaseq --input samplesheet.csv --image ghcr.io/nf-core/rnaseq@sha256:...`
-- `helixsh execution-finish --execution-id <id> --status completed --exit-code 0`
-- `helixsh audit-show --execution-id <id>`
-- `helixsh agent-run --agent claude --task variant_classification --model opus-4.6 --payload "BRCA1:c.68_69delAG"`
-- `helixsh arbitrate --responses responses.json --strategy weighted_confidence`
-- `helixsh compliance-check --image ghcr.io/tool@sha256:... --agreement-score 0.82 --confidence 0.91 --confidence 0.88`
-- `helixsh pipeline-run nf-core/rnaseq --runtime docker --resume`
 
 Behavior highlights:
 
@@ -334,7 +326,7 @@ Behavior highlights:
 - Runtime validation (Docker/Podman/Singularity/Apptainer)
 - Audit trail written to `.helixsh_audit.jsonl`
 - Dry-run by default; explicit `--execute` required for command execution
-- `--strict` blocks execution unless `--execute` is passed (accepted both before and after subcommands, e.g. `helixsh --strict run ...` or `helixsh run --strict ...`)
+- `--strict` blocks execution unless `--execute` is passed
 - In strict mode, execution also requires explicit `--yes` confirmation
 - Intent parsing scaffold for RNA-seq/WGS/WES/ChIP-seq planning
 - nf-core-style schema validation scaffold (required/type/mutually exclusive checks)
@@ -362,12 +354,6 @@ Behavior highlights:
 - Empirical calibration fitting command (`fit-calibration`)
 - Explicit POSIX wrapper renderer/executor (`exec sh -c ...`)
 - Machine-readable roadmap status report (`roadmap-status`)
-- SQLite provenance database with execution/input/container/agent/acmg/artifact/audit tables
-- Execution lifecycle commands to start/finalize and inspect persisted audit bundles
-- HAPS v1-style agent task responses (`agent-run`) with optional ACMG evidence persistence
-- Multi-agent arbitration (`arbitrate`) with majority/weighted-confidence strategies
-- Compliance mode checks for digest pinning, confidence thresholds, and manual review triggers
-- Pipeline alias command (`pipeline-run`) for direct workflow invocation ergonomics
 
 ### Local development
 
@@ -387,19 +373,4 @@ Build a self-contained local executable archive (`.pyz`) and run it directly:
 ./dist/helixsh.pyz doctor
 ```
 
-This packaging flow is self-contained, preserves CLI exit codes, and does not require publishing to PyPI.
-
-### Desktop Bash installation (local machine)
-
-Install a local desktop launcher + CLI wrapper (Linux desktop environments):
-
-```bash
-./scripts/install_desktop.sh
-helixsh --help
-```
-
-Remove installed assets with:
-
-```bash
-./scripts/uninstall_desktop.sh
-```
+This packaging flow is self-contained and does not require publishing to PyPI.

@@ -6,31 +6,9 @@ from dataclasses import dataclass
 
 
 ROLE_PERMISSIONS = {
-    "admin": {
-        "run", "pipeline-run", "doctor", "explain", "plan", "intent", "validate-schema", "mcp-check",
-        "audit-export", "audit-verify", "audit-sign", "audit-verify-signature", "parse-workflow",
-        "diagnose", "cache-report", "rbac-check", "report", "profile-suggest", "provenance",
-        "image-check", "context-check", "offline-check", "preflight", "mcp-propose", "mcp-proposals",
-        "mcp-approve", "claude-plan", "mcp-execute", "fit-calibration", "resource-estimate", "posix-wrap",
-        "roadmap-status", "db-init", "execution-start", "execution-finish", "audit-show", "agent-run",
-        "arbitrate", "compliance-check",
-    },
-    "analyst": {
-        "run", "pipeline-run", "doctor", "explain", "plan", "intent", "validate-schema", "mcp-check",
-        "audit-export", "audit-verify", "audit-sign", "audit-verify-signature", "parse-workflow",
-        "diagnose", "cache-report", "rbac-check", "report", "profile-suggest", "provenance",
-        "image-check", "context-check", "offline-check", "preflight", "mcp-propose", "mcp-proposals",
-        "mcp-approve", "claude-plan", "mcp-execute", "fit-calibration", "resource-estimate", "posix-wrap",
-        "roadmap-status", "db-init", "execution-start", "execution-finish", "audit-show", "agent-run",
-        "arbitrate", "compliance-check",
-    },
-    "auditor": {
-        "doctor", "explain", "plan", "mcp-check", "audit-export", "audit-verify", "audit-sign",
-        "audit-verify-signature", "rbac-check", "report", "provenance", "image-check", "context-check",
-        "offline-check", "preflight", "mcp-propose", "mcp-proposals", "mcp-approve", "claude-plan",
-        "mcp-execute", "fit-calibration", "resource-estimate", "posix-wrap", "roadmap-status", "db-init",
-        "audit-show", "agent-run", "arbitrate", "compliance-check",
-    },
+    "admin": {"run", "doctor", "explain", "plan", "intent", "validate-schema", "mcp-check", "audit-export", "audit-verify", "audit-sign", "audit-verify-signature", "parse-workflow", "diagnose", "cache-report", "rbac-check", "report", "profile-suggest", "provenance", "image-check", "context-check", "offline-check", "preflight", "mcp-propose", "mcp-proposals", "mcp-approve", "claude-plan", "mcp-execute", "fit-calibration", "resource-estimate", "posix-wrap", "roadmap-status"},
+    "analyst": {"run", "doctor", "explain", "plan", "intent", "validate-schema", "mcp-check", "audit-export", "audit-verify", "audit-sign", "audit-verify-signature", "parse-workflow", "diagnose", "cache-report", "rbac-check", "report", "profile-suggest", "provenance", "image-check", "context-check", "offline-check", "preflight", "mcp-propose", "mcp-proposals", "mcp-approve", "claude-plan", "mcp-execute", "fit-calibration", "resource-estimate", "posix-wrap", "roadmap-status"},
+    "auditor": {"doctor", "explain", "plan", "mcp-check", "audit-export", "audit-verify", "audit-sign", "audit-verify-signature", "rbac-check", "report", "provenance", "image-check", "context-check", "offline-check", "preflight", "mcp-propose", "mcp-proposals", "mcp-approve", "claude-plan", "mcp-execute", "fit-calibration", "resource-estimate", "posix-wrap", "roadmap-status"},
 }
 
 

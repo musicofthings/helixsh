@@ -36,10 +36,3 @@ def test_preflight_fail_on_workflow_violation(tmp_path, capsys):
     assert rc == 2
     payload = json.loads(capsys.readouterr().out)
     assert payload["checks"]["workflow"]["ok"] is False
-
-
-def test_preflight_accepts_strict_after_subcommand(capsys):
-    rc = cli.main(["preflight", "--strict"])
-    assert rc == 2
-    payload = json.loads(capsys.readouterr().out)
-    assert payload == {"ok": False, "checks": {}}

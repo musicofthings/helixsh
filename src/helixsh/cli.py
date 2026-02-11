@@ -43,25 +43,9 @@ from helixsh.calibration import load_calibration
 from helixsh.claude_cli import generate_plan
 from helixsh.empirical import fit_calibration_from_file, write_calibration
 from helixsh.mcp_runtime import execute_approved_proposal
-from helixsh.lifecycle import create_execution_context, file_size_bytes, sha256_file
-from helixsh.provenance_db import (
-    add_audit_event,
-    create_execution,
-    finish_execution,
-    get_execution_bundle,
-    init_db,
-    insert_acmg_evidence,
-    insert_agent,
-    insert_container,
-    insert_input,
-)
-from helixsh.haps import AgentResponse, run_agent_task
-from helixsh.arbitration import arbitrate
-from helixsh.compliance import evaluate_compliance
 
 AUDIT_FILE = Path(".helixsh_audit.jsonl")
 PROPOSAL_FILE = Path(".helixsh_proposals.jsonl")
-DEFAULT_DB = Path(".helixsh/db.sqlite")
 
 
 @dataclass(frozen=True)
@@ -83,17 +67,12 @@ def write_audit(event: AuditEvent) -> None:
 
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="helixsh")
-    parser.add_argument("--strict", dest="global_strict", action="store_true", help="Enable strict mode.")
+    parser.add_argument("--strict", action="store_true", help="Enable strict mode.")
     parser.add_argument("--role", default="analyst", help="Role used for RBAC authorization checks.")
 
     subparsers = parser.add_subparsers(dest="command", required=False)
 
-    def add_command_parser(name: str, **kwargs: object) -> argparse.ArgumentParser:
-        cmd_parser = subparsers.add_parser(name, **kwargs)
-        cmd_parser.add_argument("--strict", action="store_true", help="Enable strict mode.")
-        return cmd_parser
-
-    run_parser = add_command_parser("run", help="Run an nf-core pipeline via Nextflow.")
+    run_parser = subparsers.add_parser("run", help="Run an nf-core pipeline via Nextflow.")
     run_parser.add_argument("target", nargs="?", default="nf-core")
     run_parser.add_argument("pipeline", nargs="?", default="rnaseq")
     run_parser.add_argument("--org", default="nf-core")
@@ -105,73 +84,73 @@ def make_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--yes", action="store_true", help="Confirm execution in strict mode.")
     run_parser.add_argument("--nf-arg", action="append", default=[], help="Extra argument passed directly to Nextflow (repeatable).")
 
-    add_command_parser("doctor", help="Show environment diagnostics.")
+    subparsers.add_parser("doctor", help="Show environment diagnostics.")
 
-    explain_parser = add_command_parser("explain", help="Explain latest command plan.")
+    explain_parser = subparsers.add_parser("explain", help="Explain latest command plan.")
     explain_parser.add_argument("scope", nargs="?", default="last")
 
-    add_command_parser("plan", help="Display planning guidance.")
-    add_command_parser("roadmap-status", help="Show roadmap completion status.")
+    subparsers.add_parser("plan", help="Display planning guidance.")
+    subparsers.add_parser("roadmap-status", help="Show roadmap completion status.")
 
-    intent_parser = add_command_parser("intent", help="Map natural language intent to Nextflow plan.")
+    intent_parser = subparsers.add_parser("intent", help="Map natural language intent to Nextflow plan.")
     intent_parser.add_argument("text")
 
-    schema_parser = add_command_parser("validate-schema", help="Validate params against nf-core style schema JSON.")
+    schema_parser = subparsers.add_parser("validate-schema", help="Validate params against nf-core style schema JSON.")
     schema_parser.add_argument("--schema", required=True)
     schema_parser.add_argument("--params", required=True)
 
-    mcp_parser = add_command_parser("mcp-check", help="Check MCP gateway capability policy.")
+    mcp_parser = subparsers.add_parser("mcp-check", help="Check MCP gateway capability policy.")
     mcp_parser.add_argument("capability")
 
 
-    mcp_prop = add_command_parser("mcp-propose", help="Store an MCP proposal for review.")
+    mcp_prop = subparsers.add_parser("mcp-propose", help="Store an MCP proposal for review.")
     mcp_prop.add_argument("--kind", required=True)
     mcp_prop.add_argument("--summary", required=True)
     mcp_prop.add_argument("--payload", required=True)
 
-    add_command_parser("mcp-proposals", help="List MCP proposals.")
+    subparsers.add_parser("mcp-proposals", help="List MCP proposals.")
 
-    mcp_appr = add_command_parser("mcp-approve", help="Approve an MCP proposal by id.")
+    mcp_appr = subparsers.add_parser("mcp-approve", help="Approve an MCP proposal by id.")
     mcp_appr.add_argument("--id", required=True, type=int)
 
-    claude_parser = add_command_parser("claude-plan", help="Generate a Claude-style plan proposal and store it.")
+    claude_parser = subparsers.add_parser("claude-plan", help="Generate a Claude-style plan proposal and store it.")
     claude_parser.add_argument("--prompt", required=True)
 
-    mcp_exec = add_command_parser("mcp-execute", help="Execute an approved MCP proposal.")
+    mcp_exec = subparsers.add_parser("mcp-execute", help="Execute an approved MCP proposal.")
     mcp_exec.add_argument("--id", required=True, type=int)
 
-    export_parser = add_command_parser("audit-export", help="Export audit log with reproducible hash.")
+    export_parser = subparsers.add_parser("audit-export", help="Export audit log with reproducible hash.")
     export_parser.add_argument("--out", required=True)
 
-    add_command_parser("audit-verify", help="Verify audit log integrity/shape.")
+    subparsers.add_parser("audit-verify", help="Verify audit log integrity/shape.")
 
-    sign_parser = add_command_parser("audit-sign", help="Sign audit log with HMAC key.")
+    sign_parser = subparsers.add_parser("audit-sign", help="Sign audit log with HMAC key.")
     sign_parser.add_argument("--key-file", required=True)
     sign_parser.add_argument("--out", required=True, help="Path to write signature hex")
 
-    verify_sig = add_command_parser("audit-verify-signature", help="Verify audit log signature with HMAC key.")
+    verify_sig = subparsers.add_parser("audit-verify-signature", help="Verify audit log signature with HMAC key.")
     verify_sig.add_argument("--key-file", required=True)
     verify_sig.add_argument("--signature-file", required=True)
 
-    wf_parser = add_command_parser("parse-workflow", help="Parse Nextflow process blocks and check container policy.")
+    wf_parser = subparsers.add_parser("parse-workflow", help="Parse Nextflow process blocks and check container policy.")
     wf_parser.add_argument("--file", required=True)
 
-    diag_parser = add_command_parser("diagnose", help="Diagnose failed process by exit code.")
+    diag_parser = subparsers.add_parser("diagnose", help="Diagnose failed process by exit code.")
     diag_parser.add_argument("--process", required=True)
     diag_parser.add_argument("--exit-code", required=True, type=int)
     diag_parser.add_argument("--memory-gb", type=int)
 
-    cache_parser = add_command_parser("cache-report", help="Summarize cache/resume efficiency.")
+    cache_parser = subparsers.add_parser("cache-report", help="Summarize cache/resume efficiency.")
     cache_parser.add_argument("--total", required=True, type=int)
     cache_parser.add_argument("--cached", required=True, type=int)
     cache_parser.add_argument("--invalidated", action="append", default=[])
 
 
-    rbac_parser = add_command_parser("rbac-check", help="Check role-based access for an action.")
+    rbac_parser = subparsers.add_parser("rbac-check", help="Check role-based access for an action.")
     rbac_parser.add_argument("--role", required=True)
     rbac_parser.add_argument("--action", required=True)
 
-    report_parser = add_command_parser("report", help="Generate validation report artifact.")
+    report_parser = subparsers.add_parser("report", help="Generate validation report artifact.")
     report_parser.add_argument("--schema-ok", action="store_true")
     report_parser.add_argument("--container-policy-ok", action="store_true")
     report_parser.add_argument("--cache-percent", type=int, default=0)
@@ -179,43 +158,43 @@ def make_parser() -> argparse.ArgumentParser:
     report_parser.add_argument("--out", required=True)
 
 
-    res_parser = add_command_parser("resource-estimate", help="Estimate CPU/memory for tool + assay + samples.")
+    res_parser = subparsers.add_parser("resource-estimate", help="Estimate CPU/memory for tool + assay + samples.")
     res_parser.add_argument("--tool", required=True)
     res_parser.add_argument("--assay", required=True)
     res_parser.add_argument("--samples", required=True, type=int)
     res_parser.add_argument("--calibration", help="Path to calibration JSON with cpu/memory multipliers")
 
-    fit_parser = add_command_parser("fit-calibration", help="Fit calibration multipliers from observation JSON.")
+    fit_parser = subparsers.add_parser("fit-calibration", help="Fit calibration multipliers from observation JSON.")
     fit_parser.add_argument("--observations", required=True)
     fit_parser.add_argument("--out", required=True)
 
-    prof_parser = add_command_parser("profile-suggest", help="Suggest pipeline/profile args for assay and reference.")
+    prof_parser = subparsers.add_parser("profile-suggest", help="Suggest pipeline/profile args for assay and reference.")
     prof_parser.add_argument("--assay", required=True)
     prof_parser.add_argument("--reference")
     prof_parser.add_argument("--offline", action="store_true")
 
-    prov_parser = add_command_parser("provenance", help="Generate reproducible execution hash record.")
+    prov_parser = subparsers.add_parser("provenance", help="Generate reproducible execution hash record.")
     prov_parser.add_argument("--command", dest="plan_command", required=True)
     prov_parser.add_argument("--params", required=True, help="JSON string of parameters")
 
-    img_parser = add_command_parser("image-check", help="Check container image digest policy.")
+    img_parser = subparsers.add_parser("image-check", help="Check container image digest policy.")
     img_parser.add_argument("--image", required=True)
 
 
-    ctx_parser = add_command_parser("context-check", help="Summarize samplesheet and nextflow.config defaults.")
+    ctx_parser = subparsers.add_parser("context-check", help="Summarize samplesheet and nextflow.config defaults.")
     ctx_parser.add_argument("--samplesheet")
     ctx_parser.add_argument("--config")
 
-    off_parser = add_command_parser("offline-check", help="Check offline cache readiness.")
+    off_parser = subparsers.add_parser("offline-check", help="Check offline cache readiness.")
     off_parser.add_argument("--cache-root", default=".helixsh_cache")
 
 
 
-    posix_parser = add_command_parser("posix-wrap", help="Render/execute explicit POSIX boundary wrapper.")
+    posix_parser = subparsers.add_parser("posix-wrap", help="Render/execute explicit POSIX boundary wrapper.")
     posix_parser.add_argument("args", nargs="+", help="Command arguments to wrap")
     posix_parser.add_argument("--execute", action="store_true", help="Execute wrapped command")
 
-    pre_parser = add_command_parser("preflight", help="Run combined preflight checks before execution.")
+    pre_parser = subparsers.add_parser("preflight", help="Run combined preflight checks before execution.")
     pre_parser.add_argument("--schema")
     pre_parser.add_argument("--params")
     pre_parser.add_argument("--workflow")
@@ -223,59 +202,6 @@ def make_parser() -> argparse.ArgumentParser:
     pre_parser.add_argument("--samplesheet")
     pre_parser.add_argument("--config")
     pre_parser.add_argument("--image")
-
-    db_init = add_command_parser("db-init", help="Initialize helixsh SQLite provenance database.")
-    db_init.add_argument("--db", default=str(DEFAULT_DB))
-
-    exec_start = add_command_parser("execution-start", help="Start and persist an execution lifecycle record.")
-    exec_start.add_argument("--command", dest="exec_command", required=True)
-    exec_start.add_argument("--workflow")
-    exec_start.add_argument("--agent")
-    exec_start.add_argument("--model")
-    exec_start.add_argument("--container-digest")
-    exec_start.add_argument("--runtime", default="docker")
-    exec_start.add_argument("--image")
-    exec_start.add_argument("--input", action="append", default=[])
-    exec_start.add_argument("--db", default=str(DEFAULT_DB))
-
-    exec_finish = add_command_parser("execution-finish", help="Finalize an execution lifecycle record.")
-    exec_finish.add_argument("--execution-id", required=True)
-    exec_finish.add_argument("--status", required=True)
-    exec_finish.add_argument("--exit-code", type=int, default=0)
-    exec_finish.add_argument("--output-hash")
-    exec_finish.add_argument("--db", default=str(DEFAULT_DB))
-
-    audit_show = add_command_parser("audit-show", help="Show full persisted execution/audit bundle by execution id.")
-    audit_show.add_argument("--execution-id", required=True)
-    audit_show.add_argument("--db", default=str(DEFAULT_DB))
-
-    agent_run = add_command_parser("agent-run", help="Run an HAPS v1 task against a configured agent adapter.")
-    agent_run.add_argument("--agent", required=True)
-    agent_run.add_argument("--task", required=True)
-    agent_run.add_argument("--model", default="local")
-    agent_run.add_argument("--payload", required=True)
-    agent_run.add_argument("--execution-id")
-    agent_run.add_argument("--db", default=str(DEFAULT_DB))
-
-    arb = add_command_parser("arbitrate", help="Arbitrate multiple agent responses.")
-    arb.add_argument("--responses", required=True, help="Path to JSON array of HAPS responses")
-    arb.add_argument("--strategy", default="majority", choices=["majority", "weighted_confidence"])
-
-    compliance = add_command_parser("compliance-check", help="Run CAP/CLIA-oriented compliance checks.")
-    compliance.add_argument("--image", action="append", default=[])
-    compliance.add_argument("--agreement-score", type=float, default=1.0)
-    compliance.add_argument("--confidence", action="append", type=float, default=[])
-    compliance.add_argument("--evidence-conflict", action="store_true")
-
-    pipeline_run = add_command_parser("pipeline-run", help="Run a pipeline (alias of run with pipeline ref).")
-    pipeline_run.add_argument("pipeline", help="Pipeline ref, e.g. nf-core/rnaseq")
-    pipeline_run.add_argument("--runtime", default="docker")
-    pipeline_run.add_argument("--input", dest="input_file")
-    pipeline_run.add_argument("--resume", action="store_true")
-    pipeline_run.add_argument("--offline", action="store_true")
-    pipeline_run.add_argument("--execute", action="store_true")
-    pipeline_run.add_argument("--yes", action="store_true")
-    pipeline_run.add_argument("--nf-arg", action="append", default=[])
 
     return parser
 
@@ -669,149 +595,10 @@ def cmd_preflight(schema: str | None, params: str | None, workflow: str | None, 
     return 0 if overall_ok else 2
 
 
-def cmd_db_init(db_path: str) -> int:
-    init_db(db_path)
-    print(json.dumps({"ok": True, "db": db_path}, indent=2))
-    return 0
-
-
-def cmd_execution_start(command: str, workflow: str | None, agent: str | None, model: str | None, container_digest: str | None, runtime: str, image: str | None, inputs: list[str], db_path: str) -> int:
-    init_db(db_path)
-    context = create_execution_context(
-        working_dir=str(Path.cwd()),
-        input_files=inputs,
-        agent=agent,
-        container_digest=container_digest,
-    )
-    create_execution(
-        db_path,
-        execution_id=context.execution_id,
-        command=command,
-        workflow=workflow,
-        agent=agent,
-        model=model,
-        status="running",
-        start_time=context.timestamp,
-        container_digest=container_digest,
-        input_hash=context.input_hash,
-    )
-    for path in inputs:
-        insert_input(
-            db_path,
-            execution_id=context.execution_id,
-            file_path=path,
-            sha256=sha256_file(path),
-            size_bytes=file_size_bytes(path),
-        )
-    if image:
-        image_digest = image.split("@sha256:", 1)[1] if "@sha256:" in image else None
-        insert_container(
-            db_path,
-            execution_id=context.execution_id,
-            image_name=image.split("@", 1)[0],
-            image_digest=image_digest,
-            runtime=runtime,
-            version=None,
-        )
-    add_audit_event(db_path, execution_id=context.execution_id, event_type="execution_started", message="Execution record created")
-
-    print(json.dumps({"execution_context": asdict(context)}, indent=2))
-    return 0
-
-
-def cmd_execution_finish(execution_id: str, status: str, exit_code: int, output_hash: str | None, db_path: str) -> int:
-    finish_execution(
-        db_path,
-        execution_id=execution_id,
-        status=status,
-        end_time=datetime.now(UTC).isoformat(),
-        output_hash=output_hash,
-        exit_code=exit_code,
-    )
-    add_audit_event(db_path, execution_id=execution_id, event_type="execution_finished", message=f"Execution finished with status={status}")
-    print(json.dumps({"ok": True, "execution_id": execution_id, "status": status}, indent=2))
-    return 0
-
-
-def cmd_audit_show(execution_id: str, db_path: str) -> int:
-    payload = get_execution_bundle(db_path, execution_id)
-    print(json.dumps(payload, indent=2))
-    return 0
-
-
-def cmd_agent_run(agent: str, task: str, model: str, payload: str, execution_id: str | None, db_path: str) -> int:
-    response = run_agent_task(agent=agent, model=model, task=task, payload=payload)
-    if execution_id:
-        init_db(db_path)
-        insert_agent(
-            db_path,
-            execution_id=execution_id,
-            agent_name=response.agent,
-            model=response.model,
-            reasoning=response.reasoning,
-            confidence=response.confidence,
-            execution_time_ms=response.execution_time_ms,
-            raw_output=json.dumps(asdict(response), ensure_ascii=False),
-        )
-        if isinstance(response.acmg_evidence, dict):
-            for rule_code, triggered in response.acmg_evidence.items():
-                insert_acmg_evidence(
-                    db_path,
-                    execution_id=execution_id,
-                    rule_code=rule_code,
-                    triggered=bool(triggered),
-                    strength="supporting" if triggered else "none",
-                    explanation=f"Rule {rule_code} set by agent output",
-                )
-    print(json.dumps(asdict(response), indent=2))
-    return 0
-
-
-def cmd_arbitrate(responses_path: str, strategy: str) -> int:
-    payload = load_json(responses_path)
-    responses = [AgentResponse(**item) for item in payload]
-    result = arbitrate(responses, strategy=strategy)
-    print(json.dumps(asdict(result), indent=2))
-    return 0
-
-
-def cmd_compliance_check(images: list[str], agreement_score: float, confidences: list[float], evidence_conflict: bool) -> int:
-    result = evaluate_compliance(
-        images=images,
-        agreement_score=agreement_score,
-        confidences=confidences,
-        evidence_conflict=evidence_conflict,
-    )
-    print(json.dumps(asdict(result), indent=2))
-    return 0 if result.ok else 2
-
-
-def cmd_pipeline_run(args: argparse.Namespace, strict: bool, role: str) -> int:
-    pipeline_ref = args.pipeline
-    if "/" in pipeline_ref:
-        org, pipeline = pipeline_ref.split("/", 1)
-    else:
-        org, pipeline = "nf-core", pipeline_ref
-
-    run_args = argparse.Namespace(
-        target="nf-core",
-        pipeline=pipeline,
-        org=org,
-        runtime=args.runtime,
-        input_file=args.input_file,
-        resume=args.resume,
-        offline=args.offline,
-        execute=args.execute,
-        yes=args.yes,
-        nf_arg=args.nf_arg,
-    )
-    return cmd_run(run_args, strict=strict, role=role)
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = make_parser()
     args = parser.parse_args(argv)
-    strict = bool(getattr(args, "global_strict", False) or getattr(args, "strict", False))
+    strict = bool(getattr(args, "strict", False))
 
     auth_rc = authorize(getattr(args, "role", "analyst"), args.command)
     if auth_rc != 0:
@@ -878,22 +665,6 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_offline_check(args.cache_root)
         if args.command == "preflight":
             return cmd_preflight(args.schema, args.params, args.workflow, args.cache_root, args.samplesheet, args.config, args.image)
-        if args.command == "db-init":
-            return cmd_db_init(args.db)
-        if args.command == "execution-start":
-            return cmd_execution_start(args.exec_command, args.workflow, args.agent, args.model, args.container_digest, args.runtime, args.image, args.input, args.db)
-        if args.command == "execution-finish":
-            return cmd_execution_finish(args.execution_id, args.status, args.exit_code, args.output_hash, args.db)
-        if args.command == "audit-show":
-            return cmd_audit_show(args.execution_id, args.db)
-        if args.command == "agent-run":
-            return cmd_agent_run(args.agent, args.task, args.model, args.payload, args.execution_id, args.db)
-        if args.command == "arbitrate":
-            return cmd_arbitrate(args.responses, args.strategy)
-        if args.command == "compliance-check":
-            return cmd_compliance_check(args.image, args.agreement_score, args.confidence, args.evidence_conflict)
-        if args.command == "pipeline-run":
-            return cmd_pipeline_run(args, strict=strict, role=getattr(args, "role", "analyst"))
         if args.command == "posix-wrap":
             return cmd_posix_wrap(args.args, args.execute)
 

@@ -8,7 +8,7 @@ ARTIFACT="$DIST_DIR/helixsh.pyz"
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 
-python -m zipapp "$ROOT_DIR/src" -m "helixsh.__main__:run" -p "/usr/bin/env python3" -o "$ARTIFACT"
+python -m zipapp "$ROOT_DIR/src" -m "helixsh.cli:main" -p "/usr/bin/env python3" -o "$ARTIFACT"
 chmod +x "$ARTIFACT"
 
 echo "Built local deployment artifact: $ARTIFACT"
