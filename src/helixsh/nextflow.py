@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-SUPPORTED_RUNTIMES = {"docker", "podman", "singularity", "apptainer"}
+# conda: enables Nextflow -with-conda support (bioconda channel)
+SUPPORTED_RUNTIMES = {"docker", "podman", "singularity", "apptainer", "conda"}
 
 
 class HelixshError(ValueError):
@@ -20,6 +21,7 @@ class RunConfig:
     input_file: str | None = None
     resume: bool = False
     extra_args: tuple[str, ...] = ()
+    outdir: str | None = None
 
 
 def normalize_pipeline(org: str, pipeline: str) -> str:
@@ -51,9 +53,15 @@ def validate_input_file(input_file: str | None) -> str | None:
 
 
 def build_nextflow_run_command(config: RunConfig) -> list[str]:
-    cmd: list[str] = ["nextflow", "run", config.pipeline, "-profile", config.profile]
+    # conda uses -with-conda rather than -profile
+    if config.profile == "conda":
+        cmd: list[str] = ["nextflow", "run", config.pipeline, "-with-conda"]
+    else:
+        cmd = ["nextflow", "run", config.pipeline, "-profile", config.profile]
     if config.input_file:
         cmd.extend(["--input", config.input_file])
+    if config.outdir:
+        cmd.extend(["--outdir", config.outdir])
     if config.resume:
         cmd.append("-resume")
     cmd.extend(config.extra_args)

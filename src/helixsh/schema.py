@@ -41,6 +41,8 @@ def validate_params(schema: dict, params: dict) -> ValidationResult:
             issues.append(ValidationIssue(field=key, message="Expected integer"))
         elif expected == "boolean" and not isinstance(value, bool):
             issues.append(ValidationIssue(field=key, message="Expected boolean"))
+        elif expected == "number" and not isinstance(value, (int, float)):
+            issues.append(ValidationIssue(field=key, message="Expected number"))
 
     for group in schema.get("mutually_exclusive", []):
         present = [name for name in group if params.get(name) not in (None, False)]
