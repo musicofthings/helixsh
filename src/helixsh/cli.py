@@ -64,6 +64,33 @@ from helixsh.bioconda import (
     list_known_tools,
     search_package,
 )
+from helixsh.nf_launch import LaunchConfig, check_auth as nf_check_auth, launch_pipeline
+from helixsh.samplesheet import generate_samplesheet, validate_samplesheet
+from helixsh.ref_genome import download_genome, list_genomes, plan_download
+from helixsh.trace import parse_trace
+from helixsh.cloud_cost import compare_providers, estimate_cost
+from helixsh.pipeline_registry import (
+    check_pipeline_version,
+    list_pipelines as list_registry_pipelines,
+    refresh_registry,
+)
+from helixsh.envmodules import (
+    generate_modules_config,
+    list_known_modules,
+    write_modules_config,
+)
+from helixsh.tower import (
+    TowerRunConfig,
+    check_auth as tower_check_auth,
+    get_run_status,
+    list_compute_envs,
+    submit_run,
+)
+from helixsh.snakemake_bridge import (
+    export_calibration_json,
+    import_summary,
+    parse_snakefile,
+)
 
 # Curated list of popular nf-core pipelines for `nf-list`
 _NF_CORE_PIPELINES = [
@@ -298,6 +325,97 @@ def make_parser() -> argparse.ArgumentParser:
     conda_env_p.add_argument("--execute", action="store_true", help="Actually create the environment.")
 
     subparsers.add_parser("nf-list", help="List curated nf-core pipelines.")
+
+    # ── nf-launch (Seqera Platform / nextflow launch 25.x) ────────────────────
+    nf_launch_p = subparsers.add_parser("nf-launch", help="Launch pipeline via Seqera Platform / nextflow launch.")
+    nf_launch_p.add_argument("--pipeline", required=True, help="Pipeline name or repo (e.g. nf-core/rnaseq).")
+    nf_launch_p.add_argument("--revision", default="main")
+    nf_launch_p.add_argument("--profile", default="docker")
+    nf_launch_p.add_argument("--outdir", default="results")
+    nf_launch_p.add_argument("--workspace-id")
+    nf_launch_p.add_argument("--compute-env")
+    nf_launch_p.add_argument("--param", action="append", default=[], metavar="KEY=VALUE",
+                              help="Pipeline parameter (repeatable): --param genome=GRCh38")
+    nf_launch_p.add_argument("--execute", action="store_true", help="Actually run (default: dry-run).")
+    subparsers.add_parser("nf-auth", help="Show Seqera Platform authentication status.")
+
+    # ── samplesheet ────────────────────────────────────────────────────────────
+    ss_val_p = subparsers.add_parser("samplesheet-validate", help="Validate an nf-core samplesheet CSV.")
+    ss_val_p.add_argument("--file", required=True, help="Path to samplesheet CSV.")
+    ss_val_p.add_argument("--pipeline", default="rnaseq", help="Pipeline schema to validate against.")
+
+    ss_gen_p = subparsers.add_parser("samplesheet-generate", help="Generate samplesheet from a FASTQ directory.")
+    ss_gen_p.add_argument("--fastq-dir", required=True, help="Directory containing FASTQ files.")
+    ss_gen_p.add_argument("--pipeline", default="rnaseq")
+    ss_gen_p.add_argument("--strandedness", default="auto",
+                           choices=["auto", "forward", "reverse", "unstranded"])
+    ss_gen_p.add_argument("--out", help="Write CSV to this path (default: print to stdout).")
+
+    # ── ref-genome ─────────────────────────────────────────────────────────────
+    subparsers.add_parser("ref-list", help="List available reference genomes in the catalogue.")
+    ref_dl_p = subparsers.add_parser("ref-download", help="Download and cache a reference genome.")
+    ref_dl_p.add_argument("--genome", required=True, help="Genome ID (e.g. GRCh38).")
+    ref_dl_p.add_argument("--cache-root", default=".helixsh_cache/refs",
+                           help="Root directory for cached genome files.")
+    ref_dl_p.add_argument("--execute", action="store_true", help="Actually download (default: dry-run).")
+
+    # ── trace-summary ─────────────────────────────────────────────────────────
+    trace_p = subparsers.add_parser("trace-summary", help="Summarise a Nextflow trace.txt file.")
+    trace_p.add_argument("--file", required=True, help="Path to trace.txt.")
+
+    # ── cost-estimate ─────────────────────────────────────────────────────────
+    cost_p = subparsers.add_parser("cost-estimate", help="Estimate cloud cost for a pipeline run.")
+    cost_p.add_argument("--cpu", required=True, type=int, help="Total CPUs across all tasks.")
+    cost_p.add_argument("--memory-gb", required=True, type=int, help="Total memory (GB) across all tasks.")
+    cost_p.add_argument("--hours", required=True, type=float, help="Estimated wall-clock hours.")
+    cost_p.add_argument("--provider", default="aws", choices=["aws", "gcp", "azure"],
+                         help="Cloud provider (default: aws).")
+    cost_p.add_argument("--instance-family", default="general",
+                         choices=["general", "compute", "memory", "spot"])
+    cost_p.add_argument("--compare-all", action="store_true",
+                         help="Compare cost across all providers.")
+
+    # ── pipeline-update ───────────────────────────────────────────────────────
+    subparsers.add_parser("pipeline-list", help="List known nf-core pipelines with latest versions.")
+    pl_up_p = subparsers.add_parser("pipeline-update", help="Check if a pinned pipeline version is current.")
+    pl_up_p.add_argument("--pipeline", required=True, help="Pipeline name (e.g. rnaseq or nf-core/rnaseq).")
+    pl_up_p.add_argument("--pinned", required=True, help="Version you are currently using.")
+    pl_up_p.add_argument("--cache", help="Path to local pipeline registry cache JSON.")
+    pl_up_p.add_argument("--refresh", action="store_true",
+                          help="Fetch latest versions from nf-co.re before checking.")
+
+    # ── envmodules-wrap ───────────────────────────────────────────────────────
+    em_p = subparsers.add_parser("envmodules-wrap", help="Generate Nextflow modules.config for HPC clusters.")
+    em_p.add_argument("--tool", action="append", required=True, dest="tools",
+                       help="Tool name (repeatable): --tool star --tool samtools")
+    em_p.add_argument("--out", help="Write modules.config to this path (default: print to stdout).")
+    em_p.add_argument("--process-prefix", default="",
+                       help="Prefix for process selectors (e.g. 'NFCORE_RNASEQ:').")
+    subparsers.add_parser("envmodules-list", help="List tools with known HPC module names.")
+
+    # ── tower-submit ──────────────────────────────────────────────────────────
+    tw_p = subparsers.add_parser("tower-submit", help="Submit pipeline run to Seqera Platform REST API.")
+    tw_p.add_argument("--pipeline", required=True)
+    tw_p.add_argument("--revision", default="main")
+    tw_p.add_argument("--profile", default="docker")
+    tw_p.add_argument("--work-dir", default="s3://your-bucket/work")
+    tw_p.add_argument("--workspace-id")
+    tw_p.add_argument("--compute-env-id")
+    tw_p.add_argument("--param", action="append", default=[], metavar="KEY=VALUE")
+    tw_p.add_argument("--execute", action="store_true")
+    subparsers.add_parser("tower-auth", help="Check Seqera Platform authentication status.")
+
+    tw_status_p = subparsers.add_parser("tower-status", help="Get run status from Seqera Platform.")
+    tw_status_p.add_argument("--workflow-id", required=True)
+    tw_status_p.add_argument("--workspace-id")
+
+    subparsers.add_parser("tower-envs", help="List available Seqera Platform compute environments.")
+
+    # ── snakemake-import ──────────────────────────────────────────────────────
+    sm_p = subparsers.add_parser("snakemake-import", help="Import resource declarations from a Snakefile.")
+    sm_p.add_argument("--file", required=True, help="Path to Snakefile.")
+    sm_p.add_argument("--export-calibration", metavar="PATH",
+                       help="Write helixsh calibration observations JSON to this path.")
 
     return parser
 
@@ -839,6 +957,241 @@ def cmd_nf_list() -> int:
     return 0
 
 
+# ── nf-launch / nf-auth ───────────────────────────────────────────────────────
+
+def _parse_params(param_list: list[str]) -> dict[str, str]:
+    """Convert ['key=value', ...] to {'key': 'value', ...}."""
+    params: dict[str, str] = {}
+    for item in param_list:
+        if "=" in item:
+            k, v = item.split("=", 1)
+            params[k.strip()] = v.strip()
+    return params
+
+
+def cmd_nf_launch(pipeline: str, revision: str, profile: str, outdir: str,
+                  workspace_id: str | None, compute_env: str | None,
+                  params: list[str], execute: bool) -> int:
+    cfg = LaunchConfig(
+        pipeline=pipeline, revision=revision, profile=profile, outdir=outdir,
+        workspace_id=workspace_id, compute_env=compute_env,
+        params=_parse_params(params),
+    )
+    result = launch_pipeline(cfg, dry_run=not execute)
+    payload = {"command": result.command, "dry_run": result.dry_run, "ok": result.ok}
+    if result.run_url:
+        payload["run_url"] = result.run_url
+    if not result.ok and result.stderr:
+        payload["error"] = result.stderr
+    print(json.dumps(payload, indent=2))
+    return 0 if result.ok else 2
+
+
+def cmd_nf_auth() -> int:
+    print(json.dumps(nf_check_auth(), indent=2))
+    return 0
+
+
+# ── samplesheet ───────────────────────────────────────────────────────────────
+
+def cmd_samplesheet_validate(file: str, pipeline: str) -> int:
+    result = validate_samplesheet(file, pipeline)
+    payload = {
+        "ok": result.ok,
+        "pipeline": result.pipeline,
+        "row_count": result.row_count,
+        "issues": [{"row": i.row, "field": i.field, "message": i.message} for i in result.issues],
+    }
+    print(json.dumps(payload, indent=2))
+    return 0 if result.ok else 2
+
+
+def cmd_samplesheet_generate(fastq_dir: str, pipeline: str, strandedness: str,
+                              out: str | None) -> int:
+    result = generate_samplesheet(fastq_dir, pipeline=pipeline, strandedness=strandedness)
+    if out:
+        Path(out).parent.mkdir(parents=True, exist_ok=True)
+        Path(out).write_text(result.csv_text, encoding="utf-8")
+        payload: dict = {"ok": True, "out": out, "rows": len(result.rows), "warnings": result.warnings}
+    else:
+        payload = {"ok": True, "rows": len(result.rows), "warnings": result.warnings,
+                   "csv": result.csv_text}
+    print(json.dumps(payload, indent=2))
+    return 0 if result.rows else 2
+
+
+# ── ref-genome ────────────────────────────────────────────────────────────────
+
+def cmd_ref_list() -> int:
+    print(json.dumps(list_genomes(), indent=2))
+    return 0
+
+
+def cmd_ref_download(genome: str, cache_root: str, execute: bool) -> int:
+    if execute:
+        result = download_genome(genome, cache_root, dry_run=False)
+    else:
+        plan = plan_download(genome, cache_root)
+        payload = {
+            "dry_run": True, "genome": genome,
+            "to_download": plan.files,
+            "already_cached": plan.already_cached,
+        }
+        print(json.dumps(payload, indent=2))
+        return 0
+    payload = asdict(result)
+    payload["dry_run"] = False
+    print(json.dumps(payload, indent=2))
+    return 0 if result.ok else 2
+
+
+# ── trace-summary ─────────────────────────────────────────────────────────────
+
+def cmd_trace_summary(file: str) -> int:
+    summary = parse_trace(file)
+    payload = {
+        "trace_file": summary.trace_file,
+        "total_tasks": summary.total_tasks,
+        "failed_tasks": summary.failed_tasks,
+        "total_walltime_s": summary.total_walltime_s,
+        "total_cpu_hours": summary.total_cpu_hours,
+        "warnings": summary.warnings,
+        "processes": [
+            {
+                "process": p.process,
+                "task_count": p.task_count,
+                "failed_count": p.failed_count,
+                "avg_duration_s": p.avg_duration_s,
+                "max_duration_s": p.max_duration_s,
+                "avg_cpu_pct": p.avg_cpu_pct,
+                "max_peak_rss_mb": p.max_peak_rss_mb,
+                "avg_peak_rss_mb": p.avg_peak_rss_mb,
+                "recommendation": p.recommendation,
+            }
+            for p in summary.processes
+        ],
+    }
+    print(json.dumps(payload, indent=2))
+    if summary.warnings and summary.total_tasks == 0:
+        return 2  # file missing or empty
+    return 0 if summary.failed_tasks == 0 else 2
+
+
+# ── cost-estimate ─────────────────────────────────────────────────────────────
+
+def cmd_cost_estimate(cpu: int, memory_gb: int, hours: float,
+                      provider: str, instance_family: str, compare_all: bool) -> int:
+    if compare_all:
+        estimates = compare_providers(total_cpu=cpu, total_memory_gb=memory_gb,
+                                      wall_hours=hours, instance_family=instance_family)
+        print(json.dumps([asdict(e) for e in estimates], indent=2))
+    else:
+        estimate = estimate_cost(total_cpu=cpu, total_memory_gb=memory_gb, wall_hours=hours,
+                                  provider=provider, instance_family=instance_family)
+        print(json.dumps(asdict(estimate), indent=2))
+    return 0
+
+
+# ── pipeline-list / pipeline-update ──────────────────────────────────────────
+
+def cmd_pipeline_list(cache: str | None = None) -> int:
+    pipelines = list_registry_pipelines(cache)
+    print(json.dumps([{"name": p.name, "latest": p.latest, "description": p.description}
+                       for p in pipelines], indent=2))
+    return 0
+
+
+def cmd_pipeline_update(pipeline: str, pinned: str, cache: str | None, refresh: bool) -> int:
+    if refresh and cache:
+        ref_result = refresh_registry(cache)
+        if not ref_result.ok:
+            print(f"helixsh warning: registry refresh failed: {ref_result.error}", file=sys.stderr)
+    result = check_pipeline_version(pipeline, pinned, cache_path=cache)
+    payload = {
+        "pipeline": result.name,
+        "pinned": result.pinned,
+        "latest": result.latest,
+        "up_to_date": result.up_to_date,
+        "description": result.description,
+    }
+    if result.up_to_date is False:
+        payload["message"] = f"Update available: {result.pinned} → {result.latest}"
+    print(json.dumps(payload, indent=2))
+    return 0 if result.up_to_date is not False else 2
+
+
+# ── envmodules-wrap / envmodules-list ─────────────────────────────────────────
+
+def cmd_envmodules_list() -> int:
+    print(json.dumps(list_known_modules(), indent=2))
+    return 0
+
+
+def cmd_envmodules_wrap(tools: list[str], out: str | None, process_prefix: str) -> int:
+    config = generate_modules_config(tools, process_selector_prefix=process_prefix)
+    if out:
+        write_modules_config(config, out)
+        payload = {"ok": True, "out": out, "entries": len(config.entries), "warnings": config.warnings}
+    else:
+        payload = {"ok": True, "entries": len(config.entries), "warnings": config.warnings,
+                   "config": config.to_nextflow_config()}
+    print(json.dumps(payload, indent=2))
+    return 0 if not config.warnings else 0   # warnings are non-fatal
+
+
+# ── tower-submit / tower-auth / tower-status / tower-envs ────────────────────
+
+def cmd_tower_auth() -> int:
+    print(json.dumps(tower_check_auth(), indent=2))
+    return 0
+
+
+def cmd_tower_submit(pipeline: str, revision: str, profile: str, work_dir: str,
+                     workspace_id: str | None, compute_env_id: str | None,
+                     params: list[str], execute: bool) -> int:
+    cfg = TowerRunConfig(
+        pipeline=pipeline, revision=revision, profile=profile, work_dir=work_dir,
+        workspace_id=workspace_id, compute_env_id=compute_env_id,
+        params=_parse_params(params),
+    )
+    result = submit_run(cfg, dry_run=not execute)
+    payload = {"ok": result.ok, "dry_run": result.dry_run, "workflow_id": result.workflow_id}
+    if result.run_url:
+        payload["run_url"] = result.run_url
+    if result.error:
+        payload["error"] = result.error
+    print(json.dumps(payload, indent=2))
+    return 0 if result.ok else 2
+
+
+def cmd_tower_status(workflow_id: str, workspace_id: str | None) -> int:
+    status = get_run_status(workflow_id, workspace_id=workspace_id)
+    payload = {"workflow_id": status.workflow_id, "status": status.status,
+               "pipeline": status.pipeline, "progress": status.progress}
+    if status.error:
+        payload["error"] = status.error
+    print(json.dumps(payload, indent=2))
+    return 0 if status.status not in {"error", "FAILED"} else 2
+
+
+def cmd_tower_envs(workspace_id: str | None = None) -> int:
+    envs = list_compute_envs(workspace_id=workspace_id)
+    print(json.dumps(envs, indent=2))
+    return 0
+
+
+# ── snakemake-import ──────────────────────────────────────────────────────────
+
+def cmd_snakemake_import(file: str, export_calibration: str | None) -> int:
+    result = parse_snakefile(file)
+    summary = import_summary(result)
+    if export_calibration:
+        export_calibration_json(result.rules, export_calibration)
+        summary["calibration_written_to"] = export_calibration
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = make_parser()
     args = parser.parse_args(argv)
@@ -945,6 +1298,47 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_conda_env(args.name, args.tools, args.python, args.execute)
         if args.command == "nf-list":
             return cmd_nf_list()
+        if args.command == "nf-launch":
+            return cmd_nf_launch(
+                args.pipeline, args.revision, args.profile, args.outdir,
+                args.workspace_id, args.compute_env, args.param, args.execute,
+            )
+        if args.command == "nf-auth":
+            return cmd_nf_auth()
+        if args.command == "samplesheet-validate":
+            return cmd_samplesheet_validate(args.file, args.pipeline)
+        if args.command == "samplesheet-generate":
+            return cmd_samplesheet_generate(args.fastq_dir, args.pipeline, args.strandedness, args.out)
+        if args.command == "ref-list":
+            return cmd_ref_list()
+        if args.command == "ref-download":
+            return cmd_ref_download(args.genome, args.cache_root, args.execute)
+        if args.command == "trace-summary":
+            return cmd_trace_summary(args.file)
+        if args.command == "cost-estimate":
+            return cmd_cost_estimate(args.cpu, args.memory_gb, args.hours,
+                                     args.provider, args.instance_family, args.compare_all)
+        if args.command == "pipeline-list":
+            return cmd_pipeline_list(getattr(args, "cache", None))
+        if args.command == "pipeline-update":
+            return cmd_pipeline_update(args.pipeline, args.pinned, args.cache, args.refresh)
+        if args.command == "envmodules-list":
+            return cmd_envmodules_list()
+        if args.command == "envmodules-wrap":
+            return cmd_envmodules_wrap(args.tools, args.out, args.process_prefix)
+        if args.command == "tower-auth":
+            return cmd_tower_auth()
+        if args.command == "tower-submit":
+            return cmd_tower_submit(
+                args.pipeline, args.revision, args.profile, args.work_dir,
+                args.workspace_id, args.compute_env_id, args.param, args.execute,
+            )
+        if args.command == "tower-status":
+            return cmd_tower_status(args.workflow_id, args.workspace_id)
+        if args.command == "tower-envs":
+            return cmd_tower_envs(getattr(args, "workspace_id", None))
+        if args.command == "snakemake-import":
+            return cmd_snakemake_import(args.file, args.export_calibration)
 
         parser.print_help()
         return 0

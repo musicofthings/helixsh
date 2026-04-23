@@ -13,6 +13,13 @@ _READ_ONLY = {
     "image-check", "context-check", "offline-check", "preflight",
     "provenance", "posix-wrap",
     "resource-estimate", "profile-suggest",
+    # Read-only pipeline intelligence
+    "nf-list", "nf-auth",
+    "ref-list", "pipeline-list",
+    "envmodules-list",
+    "tower-auth", "tower-status", "tower-envs",
+    "trace-summary",
+    "cost-estimate",
 }
 
 # Permissions available to analysts (pipeline operators)
@@ -22,9 +29,16 @@ _ANALYST_EXTRA = {
     "mcp-propose", "mcp-approve", "mcp-execute", "claude-plan",
     "fit-calibration",
     "conda-search", "conda-env",
-    "nf-list",
     "execution-start", "execution-finish",
     "agent-run", "arbitrate", "compliance-check",
+    # New feature commands
+    "nf-launch",
+    "samplesheet-validate", "samplesheet-generate",
+    "ref-download",
+    "pipeline-update",
+    "envmodules-wrap",
+    "tower-submit",
+    "snakemake-import",
 }
 
 # Admin-only additions (e.g. installing system-wide packages)
