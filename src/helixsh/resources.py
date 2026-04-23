@@ -17,10 +17,37 @@ class ResourceEstimate:
 
 
 DEFAULTS = {
+    # RNA-seq
     "star": (8, 32),
+    "hisat2": (8, 16),
     "salmon": (2, 8),
+    "kallisto": (2, 8),
+    "featurecounts": (2, 8),
+    "htseq": (1, 4),
+    # WGS/WES alignment
     "bwa": (8, 16),
+    "bwa-mem2": (8, 24),      # bwa-mem2 uses more memory than bwa
+    "minimap2": (8, 16),      # long-read aligner
+    "bowtie2": (4, 8),
+    # Variant calling
     "gatk": (4, 16),
+    "deepvariant": (8, 32),
+    "strelka2": (8, 24),
+    "mutect2": (4, 16),
+    # QC / trimming
+    "fastp": (4, 8),
+    "trimgalore": (4, 4),
+    "fastqc": (2, 4),
+    "multiqc": (2, 4),
+    # Post-processing
+    "samtools": (4, 8),
+    "picard": (2, 16),
+    "deeptools": (8, 16),
+    # Single-cell
+    "cellranger": (16, 64),
+    "starsolo": (8, 32),
+    # Methylation
+    "bismark": (4, 16),
 }
 
 
@@ -32,10 +59,13 @@ def estimate_resources(tool: str, assay: str, samples: int, cpu_multiplier: floa
 
     cpu, mem = DEFAULTS.get(tool_norm, (2, 4))
 
-    if assay_norm in {"wgs", "wes"} and tool_norm in {"bwa", "gatk"}:
+    # Assay-specific memory adjustments for high-depth data
+    if assay_norm in {"wgs", "wes"} and tool_norm in {"bwa", "bwa-mem2", "gatk", "deepvariant", "mutect2", "strelka2"}:
         mem += 8
-    if assay_norm == "rnaseq" and tool_norm == "star":
+    if assay_norm == "rnaseq" and tool_norm in {"star", "hisat2"}:
         mem += 8
+    if assay_norm in {"atac-seq", "atacseq"} and tool_norm in {"bowtie2", "deeptools"}:
+        mem += 4
 
     cpu_adj = max(1, int(round(cpu * cpu_multiplier)))
     mem_adj = max(1, int(round(mem * memory_multiplier)))

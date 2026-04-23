@@ -43,6 +43,46 @@ from helixsh.calibration import load_calibration
 from helixsh.claude_cli import generate_plan
 from helixsh.empirical import fit_calibration_from_file, write_calibration
 from helixsh.mcp_runtime import execute_approved_proposal
+from helixsh.lifecycle import create_execution_context
+from helixsh.lifecycle import sha256_file, file_size_bytes
+from helixsh.provenance_db import (
+    add_audit_event,
+    create_execution,
+    finish_execution,
+    get_execution_bundle,
+    init_db,
+    insert_container,
+    insert_input,
+)
+from helixsh.haps import AgentResponse, run_agent_task
+from helixsh.arbitration import arbitrate
+from helixsh.compliance import evaluate_compliance
+from helixsh.bioconda import (
+    build_install_command,
+    create_env,
+    install_packages,
+    list_known_tools,
+    search_package,
+)
+
+# Curated list of popular nf-core pipelines for `nf-list`
+_NF_CORE_PIPELINES = [
+    {"name": "nf-core/rnaseq", "description": "RNA-seq quantification (STAR/Salmon/HISAT2)"},
+    {"name": "nf-core/sarek", "description": "Germline and somatic variant calling (WGS/WES)"},
+    {"name": "nf-core/chipseq", "description": "ChIP-seq peak calling and differential analysis"},
+    {"name": "nf-core/atacseq", "description": "ATAC-seq peak calling and annotation"},
+    {"name": "nf-core/methylseq", "description": "Bisulfite sequencing / DNA methylation analysis"},
+    {"name": "nf-core/scrnaseq", "description": "Single-cell RNA-seq analysis (STARsolo/Alevin/Cellranger)"},
+    {"name": "nf-core/ampliseq", "description": "Amplicon sequencing / 16S rRNA analysis"},
+    {"name": "nf-core/mag", "description": "Metagenome assembly and binning"},
+    {"name": "nf-core/viralrecon", "description": "Viral genome reconstruction (SARS-CoV-2 etc.)"},
+    {"name": "nf-core/eager", "description": "Ancient DNA analysis (aDNA)"},
+    {"name": "nf-core/nanoseq", "description": "Oxford Nanopore long-read analysis"},
+    {"name": "nf-core/hic", "description": "Hi-C chromatin conformation analysis"},
+    {"name": "nf-core/differentialabundance", "description": "Differential abundance analysis for RNA/proteomics"},
+    {"name": "nf-core/taxprofiler", "description": "Metagenomic taxonomic profiling"},
+    {"name": "nf-core/fetchngs", "description": "Fetch public sequencing data (SRA/ENA)"},
+]
 
 AUDIT_FILE = Path(".helixsh_audit.jsonl")
 PROPOSAL_FILE = Path(".helixsh_proposals.jsonl")
@@ -78,8 +118,9 @@ def make_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--org", default="nf-core")
     run_parser.add_argument("--runtime", default="docker")
     run_parser.add_argument("--input", dest="input_file")
+    run_parser.add_argument("--outdir", dest="outdir", default=None, help="Output directory (--outdir passed to pipeline).")
     run_parser.add_argument("--resume", action="store_true")
-    run_parser.add_argument("--offline", action="store_true", help="Run Nextflow in offline mode.")
+    run_parser.add_argument("--offline", action="store_true", help="Run Nextflow in offline mode (-offline flag).")
     run_parser.add_argument("--execute", action="store_true", help="Actually execute Nextflow.")
     run_parser.add_argument("--yes", action="store_true", help="Confirm execution in strict mode.")
     run_parser.add_argument("--nf-arg", action="append", default=[], help="Extra argument passed directly to Nextflow (repeatable).")
@@ -203,6 +244,61 @@ def make_parser() -> argparse.ArgumentParser:
     pre_parser.add_argument("--config")
     pre_parser.add_argument("--image")
 
+    # ── Execution lifecycle ────────────────────────────────────────────────────
+    exec_start = subparsers.add_parser("execution-start", help="Record execution start in provenance DB.")
+    exec_start.add_argument("--command", dest="run_command", required=True)
+    exec_start.add_argument("--workflow")
+    exec_start.add_argument("--db", required=True, help="Path to SQLite provenance DB.")
+    exec_start.add_argument("--input", dest="input_files", action="append", default=[], help="Input file path (repeatable).")
+    exec_start.add_argument("--image", help="Container image reference.")
+    exec_start.add_argument("--agent")
+    exec_start.add_argument("--model")
+
+    exec_finish = subparsers.add_parser("execution-finish", help="Record execution completion in provenance DB.")
+    exec_finish.add_argument("--execution-id", required=True)
+    exec_finish.add_argument("--status", required=True)
+    exec_finish.add_argument("--db", required=True)
+    exec_finish.add_argument("--exit-code", type=int)
+    exec_finish.add_argument("--output-hash")
+
+    audit_show = subparsers.add_parser("audit-show", help="Show full execution bundle from provenance DB.")
+    audit_show.add_argument("--execution-id", required=True)
+    audit_show.add_argument("--db", required=True)
+
+    # ── Agent tasks ────────────────────────────────────────────────────────────
+    agent_run = subparsers.add_parser("agent-run", help="Run an agent task via HAPS v1.")
+    agent_run.add_argument("--agent", required=True)
+    agent_run.add_argument("--task", required=True)
+    agent_run.add_argument("--model", required=True)
+    agent_run.add_argument("--payload", required=True)
+
+    arbitrate_p = subparsers.add_parser("arbitrate", help="Arbitrate between multiple agent responses.")
+    arbitrate_p.add_argument("--responses", required=True, help="JSON file with list of agent response dicts.")
+    arbitrate_p.add_argument("--strategy", default="majority", choices=["majority", "weighted_confidence"])
+
+    compliance_p = subparsers.add_parser("compliance-check", help="Evaluate clinical compliance policy.")
+    compliance_p.add_argument("--image", action="append", default=[], dest="images")
+    compliance_p.add_argument("--agreement-score", type=float, required=True)
+    compliance_p.add_argument("--confidence", action="append", type=float, default=[], dest="confidences")
+    compliance_p.add_argument("--evidence-conflict", action="store_true")
+
+    # ── Bioconda integration ───────────────────────────────────────────────────
+    conda_search_p = subparsers.add_parser("conda-search", help="Search Bioconda for a package.")
+    conda_search_p.add_argument("--package", required=True)
+
+    conda_install_p = subparsers.add_parser("conda-install", help="Install packages from Bioconda (dry-run by default).")
+    conda_install_p.add_argument("--package", action="append", required=True, dest="packages")
+    conda_install_p.add_argument("--env", dest="env_name", default=None)
+    conda_install_p.add_argument("--execute", action="store_true", help="Actually run the install (default: dry-run).")
+
+    conda_env_p = subparsers.add_parser("conda-env", help="Create a Bioconda environment (dry-run by default).")
+    conda_env_p.add_argument("--name", required=True)
+    conda_env_p.add_argument("--tool", action="append", default=[], dest="tools")
+    conda_env_p.add_argument("--python", default="3.12")
+    conda_env_p.add_argument("--execute", action="store_true", help="Actually create the environment.")
+
+    subparsers.add_parser("nf-list", help="List curated nf-core pipelines.")
+
     return parser
 
 
@@ -220,6 +316,7 @@ def cmd_run(args: argparse.Namespace, strict: bool, role: str) -> int:
         input_file=input_file,
         resume=args.resume,
         extra_args=tuple((["-offline"] if args.offline else []) + args.nf_arg),
+        outdir=getattr(args, "outdir", None),
     )
     command = build_nextflow_run_command(cfg)
     rendered = format_shell_command(command)
@@ -595,6 +692,153 @@ def cmd_preflight(schema: str | None, params: str | None, workflow: str | None, 
     return 0 if overall_ok else 2
 
 
+def cmd_execution_start(
+    command: str,
+    db: str,
+    workflow: str | None,
+    input_files: list[str],
+    image: str | None,
+    agent: str | None,
+    model: str | None,
+) -> int:
+    init_db(db)
+    ctx = create_execution_context(
+        working_dir=str(Path(db).parent.resolve()),
+        input_files=input_files,
+        agent=agent,
+        container_digest=image,
+    )
+    create_execution(
+        db,
+        execution_id=ctx.execution_id,
+        command=command,
+        workflow=workflow,
+        agent=agent,
+        model=model,
+        status="running",
+        start_time=ctx.timestamp,
+        container_digest=ctx.container_digest,
+        input_hash=ctx.input_hash,
+    )
+    for path in input_files:
+        try:
+            h = sha256_file(path)
+            sz = file_size_bytes(path)
+        except OSError:
+            h, sz = "", 0
+        insert_input(db, execution_id=ctx.execution_id, file_path=path, sha256=h, size_bytes=sz)
+    if image:
+        insert_container(
+            db,
+            execution_id=ctx.execution_id,
+            image_name=image.split("@")[0],
+            image_digest=image.split("@sha256:")[-1] if "@sha256:" in image else None,
+            runtime="docker",
+        )
+    add_audit_event(db, execution_id=ctx.execution_id, event_type="start", message=command)
+    print(json.dumps({"execution_context": asdict(ctx)}, indent=2))
+    return 0
+
+
+def cmd_execution_finish(execution_id: str, db: str, status: str, exit_code: int | None, output_hash: str | None) -> int:
+    finish_execution(
+        db,
+        execution_id=execution_id,
+        status=status,
+        end_time=datetime.now(UTC).isoformat(),
+        output_hash=output_hash,
+        exit_code=exit_code,
+    )
+    add_audit_event(db, execution_id=execution_id, event_type="finish", message=status)
+    print(json.dumps({"execution_id": execution_id, "status": status}, indent=2))
+    return 0
+
+
+def cmd_audit_show(execution_id: str, db: str) -> int:
+    bundle = get_execution_bundle(db, execution_id)
+    print(json.dumps(bundle, indent=2))
+    return 0
+
+
+def cmd_agent_run(agent: str, task: str, model: str, payload: str) -> int:
+    response = run_agent_task(agent, model, task, payload)
+    print(json.dumps(asdict(response), indent=2))
+    return 0
+
+
+def cmd_arbitrate(responses_path: str, strategy: str) -> int:
+    raw = json.loads(Path(responses_path).read_text(encoding="utf-8"))
+    responses = [
+        AgentResponse(
+            agent=r["agent"],
+            model=r["model"],
+            task=r["task"],
+            status=r["status"],
+            result=r["result"],
+            reasoning=r["reasoning"],
+            confidence=r["confidence"],
+            execution_time_ms=r["execution_time_ms"],
+            acmg_evidence=r.get("acmg_evidence"),
+        )
+        for r in raw
+    ]
+    result = arbitrate(responses, strategy=strategy)
+    print(json.dumps(asdict(result), indent=2))
+    return 0
+
+
+def cmd_compliance_check(images: list[str], agreement_score: float, confidences: list[float], evidence_conflict: bool) -> int:
+    result = evaluate_compliance(
+        images=images,
+        agreement_score=agreement_score,
+        confidences=confidences,
+        evidence_conflict=evidence_conflict,
+    )
+    print(json.dumps(asdict(result), indent=2))
+    return 0 if result.ok else 2
+
+
+def cmd_conda_search(package: str) -> int:
+    info = search_package(package)
+    print(json.dumps({"name": info.name, "channel": info.channel, "versions": info.versions}, indent=2))
+    return 0
+
+
+def cmd_conda_install(packages: list[str], env_name: str | None, execute: bool) -> int:
+    result = install_packages(packages, env_name=env_name, dry_run=not execute)
+    payload = {
+        "command": result.command,
+        "dry_run": not execute,
+        "ok": result.ok,
+    }
+    if execute:
+        payload["returncode"] = result.returncode
+        if result.stderr:
+            payload["stderr"] = result.stderr
+    print(json.dumps(payload, indent=2))
+    return 0 if result.ok else 2
+
+
+def cmd_conda_env(name: str, tools: list[str], python_version: str, execute: bool) -> int:
+    result = create_env(name, tools, python_version=python_version, dry_run=not execute)
+    payload = {
+        "command": result.command,
+        "dry_run": not execute,
+        "ok": result.ok,
+    }
+    if execute:
+        payload["returncode"] = result.returncode
+        if result.stderr:
+            payload["stderr"] = result.stderr
+    print(json.dumps(payload, indent=2))
+    return 0 if result.ok else 2
+
+
+def cmd_nf_list() -> int:
+    print(json.dumps(_NF_CORE_PIPELINES, indent=2))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = make_parser()
     args = parser.parse_args(argv)
@@ -667,6 +911,40 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_preflight(args.schema, args.params, args.workflow, args.cache_root, args.samplesheet, args.config, args.image)
         if args.command == "posix-wrap":
             return cmd_posix_wrap(args.args, args.execute)
+        if args.command == "execution-start":
+            return cmd_execution_start(
+                command=args.run_command,
+                db=args.db,
+                workflow=args.workflow,
+                input_files=args.input_files,
+                image=args.image,
+                agent=args.agent,
+                model=args.model,
+            )
+        if args.command == "execution-finish":
+            return cmd_execution_finish(
+                execution_id=args.execution_id,
+                db=args.db,
+                status=args.status,
+                exit_code=args.exit_code,
+                output_hash=args.output_hash,
+            )
+        if args.command == "audit-show":
+            return cmd_audit_show(args.execution_id, args.db)
+        if args.command == "agent-run":
+            return cmd_agent_run(args.agent, args.task, args.model, args.payload)
+        if args.command == "arbitrate":
+            return cmd_arbitrate(args.responses, args.strategy)
+        if args.command == "compliance-check":
+            return cmd_compliance_check(args.images, args.agreement_score, args.confidences, args.evidence_conflict)
+        if args.command == "conda-search":
+            return cmd_conda_search(args.package)
+        if args.command == "conda-install":
+            return cmd_conda_install(args.packages, args.env_name, args.execute)
+        if args.command == "conda-env":
+            return cmd_conda_env(args.name, args.tools, args.python, args.execute)
+        if args.command == "nf-list":
+            return cmd_nf_list()
 
         parser.print_help()
         return 0
