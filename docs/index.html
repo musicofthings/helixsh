@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>helixsh — Bioinformatics-First AI Shell</title>
+  <meta name="description" content="AI-native shell for Nextflow and nf-core. Plans, validates, diagnoses, and enforces container policy. POSIX-respecting. Dry-run by default." />
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --accent: #58a6ff;
+      --accent2: #3fb950;
+      --accent3: #d2a8ff;
+      --accent4: #ffa657;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --code-bg: #1f2937;
+      --pill-bg: #21262d;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(13,17,23,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 56px;
+    }
+    .nav-logo { font-family: monospace; font-size: 1.1rem; font-weight: 700; color: var(--accent); text-decoration: none; }
+    .nav-links { display: flex; gap: 1.5rem; list-style: none; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 0.9rem; transition: color 0.2s; }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta {
+      background: var(--accent); color: #0d1117;
+      padding: 0.35rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600;
+      text-decoration: none; transition: opacity 0.2s;
+    }
+    .nav-cta:hover { opacity: 0.85; }
+
+    /* ── HERO ── */
+    .hero {
+      text-align: center;
+      padding: 6rem 2rem 4rem;
+      max-width: 860px; margin: 0 auto;
+    }
+    .hero-badge {
+      display: inline-block;
+      background: var(--pill-bg); border: 1px solid var(--border);
+      border-radius: 20px; padding: 0.25rem 0.9rem;
+      font-size: 0.78rem; color: var(--accent); margin-bottom: 1.5rem;
+      font-family: monospace; letter-spacing: 0.05em;
+    }
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 800; line-height: 1.15;
+      margin-bottom: 1.25rem;
+    }
+    .hero h1 span { color: var(--accent); }
+    .hero p {
+      font-size: clamp(1rem, 2vw, 1.2rem);
+      color: var(--muted); max-width: 640px; margin: 0 auto 2rem;
+    }
+    .hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .btn-primary {
+      background: var(--accent); color: #0d1117;
+      padding: 0.65rem 1.6rem; border-radius: 8px; font-weight: 700; font-size: 0.95rem;
+      text-decoration: none; transition: opacity 0.2s;
+    }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-secondary {
+      background: transparent; color: var(--text);
+      border: 1px solid var(--border);
+      padding: 0.65rem 1.6rem; border-radius: 8px; font-weight: 600; font-size: 0.95rem;
+      text-decoration: none; transition: border-color 0.2s;
+    }
+    .btn-secondary:hover { border-color: var(--accent); }
+
+    /* ── TERMINAL ── */
+    .terminal-wrapper {
+      max-width: 820px; margin: 3rem auto 5rem;
+      padding: 0 1.5rem;
+    }
+    .terminal {
+      background: #0f1923;
+      border: 1px solid var(--border); border-radius: 10px;
+      overflow: hidden; font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.85rem;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+    }
+    .terminal-bar {
+      background: var(--surface); padding: 0.6rem 1rem;
+      display: flex; align-items: center; gap: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot-r { background: #ff5f57; }
+    .dot-y { background: #febc2e; }
+    .dot-g { background: #28c840; }
+    .terminal-body { padding: 1.25rem 1.5rem; line-height: 1.9; }
+    .t-prompt { color: var(--accent2); }
+    .t-cmd { color: var(--text); }
+    .t-flag { color: var(--accent4); }
+    .t-out { color: var(--muted); }
+    .t-ok { color: var(--accent2); }
+    .t-warn { color: var(--accent4); }
+    .t-comment { color: #4d5562; }
+
+    /* ── PRINCIPLES ── */
+    .section { max-width: 1100px; margin: 0 auto; padding: 4rem 2rem; }
+    .section-label {
+      font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em;
+      color: var(--accent); text-transform: uppercase; margin-bottom: 0.75rem;
+    }
+    .section-title { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 700; margin-bottom: 1rem; }
+    .section-sub { color: var(--muted); max-width: 580px; margin-bottom: 3rem; }
+
+    .principles-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem;
+    }
+    .principle-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.5rem;
+      transition: border-color 0.2s;
+    }
+    .principle-card:hover { border-color: var(--accent); }
+    .principle-icon { font-size: 1.5rem; margin-bottom: 0.75rem; }
+    .principle-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.4rem; }
+    .principle-card p { color: var(--muted); font-size: 0.88rem; }
+
+    /* ── FEATURES ── */
+    .features-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;
+    }
+    .feature-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.75rem;
+    }
+    .feature-tag {
+      display: inline-block;
+      background: var(--pill-bg); border: 1px solid var(--border);
+      border-radius: 4px; padding: 0.15rem 0.5rem;
+      font-size: 0.7rem; font-family: monospace; color: var(--accent3);
+      margin-bottom: 0.75rem;
+    }
+    .feature-card h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .feature-card p { color: var(--muted); font-size: 0.88rem; line-height: 1.65; }
+    .feature-card ul { color: var(--muted); font-size: 0.85rem; padding-left: 1.2rem; margin-top: 0.6rem; }
+    .feature-card li { margin-bottom: 0.25rem; }
+
+    /* ── COMMANDS ── */
+    .commands-section { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .cmd-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); overflow-x: auto; }
+    .cmd-tab {
+      padding: 0.75rem 1.25rem; font-size: 0.85rem; font-weight: 500;
+      color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent;
+      white-space: nowrap; transition: color 0.2s;
+      background: none; border-top: none; border-left: none; border-right: none;
+    }
+    .cmd-tab:hover { color: var(--text); }
+    .cmd-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .cmd-panel { display: none; }
+    .cmd-panel.active { display: block; }
+    .cmd-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .cmd-table th {
+      text-align: left; padding: 0.6rem 1rem;
+      border-bottom: 1px solid var(--border); color: var(--muted);
+      font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .cmd-table td { padding: 0.65rem 1rem; border-bottom: 1px solid #1c2128; vertical-align: top; }
+    .cmd-table tr:last-child td { border-bottom: none; }
+    .cmd-table tr:hover td { background: #1c2128; }
+    .cmd-mono { font-family: monospace; color: var(--accent); font-size: 0.82rem; }
+    .cmd-desc { color: var(--muted); }
+
+    /* ── CODE BLOCKS ── */
+    pre {
+      background: var(--code-bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 1.25rem 1.5rem;
+      overflow-x: auto; font-size: 0.84rem; line-height: 1.7;
+      font-family: "SFMono-Regular", Consolas, monospace;
+    }
+    code { font-family: "SFMono-Regular", Consolas, monospace; }
+    p code, li code {
+      background: var(--pill-bg); border: 1px solid var(--border);
+      border-radius: 4px; padding: 0.1em 0.4em; font-size: 0.85em; color: var(--accent3);
+    }
+
+    /* ── INSTALL ── */
+    .install-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem; }
+    .install-step {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.5rem;
+    }
+    .step-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--accent); color: #0d1117;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.85rem; margin-bottom: 0.75rem;
+    }
+    .install-step h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.4rem; }
+    .install-step p { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.6rem; }
+
+    /* ── DIVIDER ── */
+    .divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+    /* ── FOOTER ── */
+    footer {
+      text-align: center; padding: 3rem 2rem;
+      color: var(--muted); font-size: 0.85rem;
+      border-top: 1px solid var(--border);
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 600px) {
+      .nav-links { display: none; }
+      .hero { padding: 4rem 1.25rem 2.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo">helixsh</a>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#commands">Commands</a></li>
+    <li><a href="#install">Install</a></li>
+    <li><a href="https://github.com/musicofthings/helixsh">GitHub</a></li>
+  </ul>
+  <a href="https://github.com/musicofthings/helixsh" class="nav-cta">View on GitHub</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">Phase 1 — Available Now</div>
+  <h1>The shell that thinks like a<br><span>bioinformatician</span></h1>
+  <p>
+    An AI-native, POSIX-respecting shell for Nextflow and nf-core workflows.
+    Validates, plans, diagnoses, and enforces container policy —
+    while keeping AI as a planner, never an executor.
+  </p>
+  <div class="hero-actions">
+    <a href="#install" class="btn-primary">Get Started</a>
+    <a href="https://github.com/musicofthings/helixsh" class="btn-secondary">View Source</a>
+  </div>
+</section>
+
+<!-- TERMINAL -->
+<div class="terminal-wrapper">
+  <div class="terminal">
+    <div class="terminal-bar">
+      <span class="dot dot-r"></span>
+      <span class="dot dot-y"></span>
+      <span class="dot dot-g"></span>
+    </div>
+    <div class="terminal-body">
+      <div><span class="t-prompt">$ </span><span class="t-cmd">helixsh doctor</span></div>
+      <div><span class="t-out">nextflow   </span><span class="t-ok">found   </span><span class="t-out">24.10.1</span></div>
+      <div><span class="t-out">docker     </span><span class="t-ok">found   </span><span class="t-out">27.3.1</span></div>
+      <div><span class="t-out">python     </span><span class="t-ok">found   </span><span class="t-out">3.12.4</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-prompt">$ </span><span class="t-cmd">helixsh run nf-core rnaseq <span class="t-flag">--runtime docker --input samplesheet.csv</span></span></div>
+      <div><span class="t-out">[helixsh] planned: exec sh -c "nextflow run nf-core/rnaseq -profile docker --input samplesheet.csv"</span></div>
+      <div><span class="t-out">[helixsh] execution boundary: POSIX shell / Nextflow</span></div>
+      <div><span class="t-out">[helixsh] dry-run complete (use --execute to run).</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-prompt">$ </span><span class="t-cmd">helixsh intent <span class="t-flag">"run rnaseq on tumor-normal samples use docker resume"</span></span></div>
+      <div><span class="t-out">{</span></div>
+      <div><span class="t-out">&nbsp;&nbsp;"pipeline": "nf-core/rnaseq",</span></div>
+      <div><span class="t-out">&nbsp;&nbsp;"runtime": "docker",</span></div>
+      <div><span class="t-out">&nbsp;&nbsp;"resume": true,</span></div>
+      <div><span class="t-out">&nbsp;&nbsp;"sample_model": "tumor-normal"</span></div>
+      <div><span class="t-out">}</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-prompt">$ </span><span class="t-cmd">helixsh diagnose <span class="t-flag">--process QUANTIFY --exit-code 137 --memory-gb 4</span></span></div>
+      <div><span class="t-out">{</span></div>
+      <div><span class="t-out">&nbsp;&nbsp;"likely_cause": "Out-of-memory (OOM kill)",</span></div>
+      <div><span class="t-out">&nbsp;&nbsp;"context": "Salmon requires ~8–16 GB/sample",</span></div>
+      <div><span class="t-out">&nbsp;&nbsp;"options": ["Increase memory", "Reduce parallelism", "Switch to kallisto"]</span></div>
+      <div><span class="t-out">}</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- PRINCIPLES -->
+<section class="section" id="principles">
+  <div class="section-label">Design</div>
+  <h2 class="section-title">Built on five principles</h2>
+  <p class="section-sub">Every design decision in helixsh follows from these.</p>
+
+  <div class="principles-grid">
+    <div class="principle-card">
+      <div class="principle-icon">🔒</div>
+      <h3>POSIX execution boundary</h3>
+      <p>Final execution is always real <code>sh</code>/<code>bash</code> commands. No proprietary runtime, no hidden behavior.</p>
+    </div>
+    <div class="principle-card">
+      <div class="principle-icon">⚡</div>
+      <h3>Nextflow is the authority</h3>
+      <p>helixsh plans, validates, explains, and diagnoses. It does not replace Nextflow or any workflow engine.</p>
+    </div>
+    <div class="principle-card">
+      <div class="principle-icon">📦</div>
+      <h3>Container-first execution</h3>
+      <p>Docker, Podman, Singularity, and Apptainer are enforced. Host binaries are blocked. Image digests are preferred.</p>
+    </div>
+    <div class="principle-card">
+      <div class="principle-icon">🤖</div>
+      <h3>LLM as planner, not executor</h3>
+      <p>AI proposes plans and fixes. helixsh validates and decides. Nothing executes without your approval.</p>
+    </div>
+    <div class="principle-card">
+      <div class="principle-icon">🌐</div>
+      <h3>Offline-capable by design</h3>
+      <p>Local reasoning, cached schemas, and optional internet access. Works on air-gapped HPC clusters.</p>
+    </div>
+    <div class="principle-card">
+      <div class="principle-icon">🛡️</div>
+      <h3>Dry-run by default</h3>
+      <p>Every command shows what would run before it runs. <code>--execute</code> is always explicit. Strict mode requires <code>--yes</code> too.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- FEATURES -->
+<section class="section" id="features">
+  <div class="section-label">Capabilities</div>
+  <h2 class="section-title">Everything a bioinformatician needs</h2>
+  <p class="section-sub">From samplesheet generation to cloud cost estimation — all in one tool.</p>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <span class="feature-tag">intent</span>
+      <h3>Natural Language Planning</h3>
+      <p>Describe your analysis in plain English. helixsh maps it to Nextflow parameters, detects assay type, runtime, and sample model.</p>
+      <ul>
+        <li>WGS, WES, RNA-seq, cfDNA, ChIP-seq, scRNA-seq</li>
+        <li>Tumor/normal, trio, cohort sample models</li>
+        <li>Auto-selects pipeline profile and flags</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <span class="feature-tag">validation</span>
+      <h3>Pre-flight Validation</h3>
+      <p>Run a full suite of checks before touching a cluster — schema, container policy, offline readiness, context, and image digest.</p>
+      <ul>
+        <li>nf-core JSON schema validation</li>
+        <li>Nextflow process AST parsing</li>
+        <li>Samplesheet column and type checks</li>
+        <li>Container digest enforcement</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <span class="feature-tag">diagnosis</span>
+      <h3>Failure Diagnosis</h3>
+      <p>helixsh reads exit codes and memory constraints to explain why a process failed and suggests concrete remediation steps.</p>
+      <ul>
+        <li>Exit code 137 → OOM → increase memory or switch tool</li>
+        <li>Cache invalidation analysis</li>
+        <li>Resume efficiency report</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <span class="feature-tag">resources</span>
+      <h3>Resource & Cost Planning</h3>
+      <p>Estimate CPU and memory before you submit. Fit empirical calibration multipliers from past runs. Compare cloud providers.</p>
+      <ul>
+        <li>Tool-aware estimates (STAR, Salmon, GATK, BWA…)</li>
+        <li>AWS / GCP / Azure cost comparison</li>
+        <li>Snakemake calibration import</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <span class="feature-tag">audit</span>
+      <h3>Audit & Compliance</h3>
+      <p>Every run writes a tamper-evident audit log with reproducible SHA-256 hashes. Suitable for clinical genomics and regulated HPC.</p>
+      <ul>
+        <li>HMAC-signed audit trail</li>
+        <li>RBAC enforcement (analyst / auditor / viewer)</li>
+        <li>Reproducible execution hashes</li>
+        <li>SQLite provenance database</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <span class="feature-tag">platform</span>
+      <h3>Seqera Platform Integration</h3>
+      <p>Launch, monitor, and manage pipelines on Seqera Platform (formerly Nextflow Tower) via both the CLI and REST API.</p>
+      <ul>
+        <li><code>nf-launch</code> and <code>tower-submit</code></li>
+        <li>Run status polling</li>
+        <li>Compute environment listing</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <span class="feature-tag">hpc</span>
+      <h3>HPC / Environment Modules</h3>
+      <p>Generate <code>modules.config</code> for Lmod/Environment Modules clusters. No Docker required on HPC.</p>
+      <ul>
+        <li>Known module names for 20+ bioinformatics tools</li>
+        <li>Process selector prefix support</li>
+        <li>Singularity / Apptainer mode</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <span class="feature-tag">ai</span>
+      <h3>MCP Gateway + Claude Code</h3>
+      <p>AI proposes diffs and config changes via a controlled gateway. helixsh approves and executes. Claude never touches your filesystem directly.</p>
+      <ul>
+        <li>Proposal / approve / execute workflow</li>
+        <li>Capability allowlist enforcement</li>
+        <li>Multi-agent arbitration (HAPS v1)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- COMMANDS -->
+<section class="commands-section" id="commands">
+  <div class="section" style="padding-bottom: 1rem;">
+    <div class="section-label">Reference</div>
+    <h2 class="section-title">Command reference</h2>
+    <p class="section-sub">All commands are dry-run safe by default. Pass <code>--execute</code> to run.</p>
+  </div>
+
+  <div style="max-width: 1100px; margin: 0 auto; padding: 0 2rem 4rem;">
+    <div class="cmd-tabs">
+      <button class="cmd-tab active" onclick="showTab('core')">Core</button>
+      <button class="cmd-tab" onclick="showTab('pipelines')">Pipelines</button>
+      <button class="cmd-tab" onclick="showTab('data')">Data Prep</button>
+      <button class="cmd-tab" onclick="showTab('resources')">Resources</button>
+      <button class="cmd-tab" onclick="showTab('audit')">Audit</button>
+      <button class="cmd-tab" onclick="showTab('platform')">Platform</button>
+      <button class="cmd-tab" onclick="showTab('ai')">AI / MCP</button>
+    </div>
+
+    <div id="tab-core" class="cmd-panel active">
+      <table class="cmd-table">
+        <thead><tr><th>Command</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="cmd-mono">helixsh run nf-core &lt;pipeline&gt;</td><td class="cmd-desc">Plan or execute an nf-core pipeline via Nextflow. Dry-run by default.</td></tr>
+          <tr><td class="cmd-mono">helixsh doctor</td><td class="cmd-desc">Check environment: Nextflow, Docker, Python, container runtimes.</td></tr>
+          <tr><td class="cmd-mono">helixsh explain last</td><td class="cmd-desc">Show the last planned command with timestamp, role, and provenance hash.</td></tr>
+          <tr><td class="cmd-mono">helixsh plan</td><td class="cmd-desc">Display roadmap phases and planning guidance.</td></tr>
+          <tr><td class="cmd-mono">helixsh intent "&lt;text&gt;"</td><td class="cmd-desc">Parse natural language into a Nextflow parameter plan.</td></tr>
+          <tr><td class="cmd-mono">helixsh diagnose</td><td class="cmd-desc">Diagnose a failed process by exit code and memory limit.</td></tr>
+          <tr><td class="cmd-mono">helixsh cache-report</td><td class="cmd-desc">Summarize cache/resume efficiency and invalidated processes.</td></tr>
+          <tr><td class="cmd-mono">helixsh posix-wrap</td><td class="cmd-desc">Render explicit POSIX execution boundary wrapper.</td></tr>
+          <tr><td class="cmd-mono">helixsh roadmap-status</td><td class="cmd-desc">Machine-readable JSON roadmap phase completion status.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="tab-pipelines" class="cmd-panel">
+      <table class="cmd-table">
+        <thead><tr><th>Command</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="cmd-mono">helixsh nf-list</td><td class="cmd-desc">List curated nf-core pipelines with descriptions.</td></tr>
+          <tr><td class="cmd-mono">helixsh pipeline-list</td><td class="cmd-desc">List known pipelines with latest versions from registry.</td></tr>
+          <tr><td class="cmd-mono">helixsh pipeline-update</td><td class="cmd-desc">Check if your pinned version is current; optionally refresh registry.</td></tr>
+          <tr><td class="cmd-mono">helixsh profile-suggest</td><td class="cmd-desc">Suggest pipeline/profile args for a given assay and reference genome.</td></tr>
+          <tr><td class="cmd-mono">helixsh validate-schema</td><td class="cmd-desc">Validate params against nf-core style JSON schema.</td></tr>
+          <tr><td class="cmd-mono">helixsh parse-workflow</td><td class="cmd-desc">Parse Nextflow process blocks and detect container policy violations.</td></tr>
+          <tr><td class="cmd-mono">helixsh preflight</td><td class="cmd-desc">Run all checks (schema, workflow, offline, context, image) in one pass.</td></tr>
+          <tr><td class="cmd-mono">helixsh context-check</td><td class="cmd-desc">Summarize samplesheet topology and nextflow.config defaults.</td></tr>
+          <tr><td class="cmd-mono">helixsh offline-check</td><td class="cmd-desc">Check offline cache readiness for schemas, containers, and assets.</td></tr>
+          <tr><td class="cmd-mono">helixsh image-check</td><td class="cmd-desc">Check container image digest policy compliance.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="tab-data" class="cmd-panel">
+      <table class="cmd-table">
+        <thead><tr><th>Command</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="cmd-mono">helixsh samplesheet-generate</td><td class="cmd-desc">Auto-generate nf-core samplesheet CSV from a FASTQ directory.</td></tr>
+          <tr><td class="cmd-mono">helixsh samplesheet-validate</td><td class="cmd-desc">Validate samplesheet columns and types against a pipeline schema.</td></tr>
+          <tr><td class="cmd-mono">helixsh ref-list</td><td class="cmd-desc">List available reference genomes in the catalogue.</td></tr>
+          <tr><td class="cmd-mono">helixsh ref-download</td><td class="cmd-desc">Download and cache a reference genome (dry-run by default).</td></tr>
+          <tr><td class="cmd-mono">helixsh conda-search</td><td class="cmd-desc">Search Bioconda for a package and its available versions.</td></tr>
+          <tr><td class="cmd-mono">helixsh conda-install</td><td class="cmd-desc">Install Bioconda packages (dry-run by default).</td></tr>
+          <tr><td class="cmd-mono">helixsh conda-env</td><td class="cmd-desc">Create a Bioconda environment with specified tools.</td></tr>
+          <tr><td class="cmd-mono">helixsh envmodules-wrap</td><td class="cmd-desc">Generate Nextflow modules.config for HPC Lmod clusters.</td></tr>
+          <tr><td class="cmd-mono">helixsh envmodules-list</td><td class="cmd-desc">List tools with known HPC environment module names.</td></tr>
+          <tr><td class="cmd-mono">helixsh snakemake-import</td><td class="cmd-desc">Import resource declarations from a Snakefile.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="tab-resources" class="cmd-panel">
+      <table class="cmd-table">
+        <thead><tr><th>Command</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="cmd-mono">helixsh resource-estimate</td><td class="cmd-desc">Estimate CPU and memory for a tool, assay type, and sample count.</td></tr>
+          <tr><td class="cmd-mono">helixsh fit-calibration</td><td class="cmd-desc">Fit empirical calibration multipliers from observed run data.</td></tr>
+          <tr><td class="cmd-mono">helixsh trace-summary</td><td class="cmd-desc">Summarize a Nextflow trace.txt for bottlenecks and failed tasks.</td></tr>
+          <tr><td class="cmd-mono">helixsh cost-estimate</td><td class="cmd-desc">Estimate cloud cost across AWS, GCP, and Azure.</td></tr>
+          <tr><td class="cmd-mono">helixsh provenance</td><td class="cmd-desc">Generate a reproducible SHA-256 execution hash record.</td></tr>
+          <tr><td class="cmd-mono">helixsh execution-start</td><td class="cmd-desc">Record execution start in the SQLite provenance database.</td></tr>
+          <tr><td class="cmd-mono">helixsh execution-finish</td><td class="cmd-desc">Record execution completion and output hash.</td></tr>
+          <tr><td class="cmd-mono">helixsh audit-show</td><td class="cmd-desc">Show full execution bundle from the provenance database.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="tab-audit" class="cmd-panel">
+      <table class="cmd-table">
+        <thead><tr><th>Command</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="cmd-mono">helixsh audit-verify</td><td class="cmd-desc">Verify audit log JSON integrity and hash consistency.</td></tr>
+          <tr><td class="cmd-mono">helixsh audit-export</td><td class="cmd-desc">Export audit log with reproducible SHA-256 digest.</td></tr>
+          <tr><td class="cmd-mono">helixsh audit-sign</td><td class="cmd-desc">HMAC-sign the audit log with a key file.</td></tr>
+          <tr><td class="cmd-mono">helixsh audit-verify-signature</td><td class="cmd-desc">Verify an HMAC audit log signature.</td></tr>
+          <tr><td class="cmd-mono">helixsh rbac-check</td><td class="cmd-desc">Check role-based access for a given role and action.</td></tr>
+          <tr><td class="cmd-mono">helixsh report</td><td class="cmd-desc">Generate a structured validation report for regulated environments.</td></tr>
+          <tr><td class="cmd-mono">helixsh compliance-check</td><td class="cmd-desc">Evaluate clinical compliance policy for AI agent pipelines.</td></tr>
+          <tr><td class="cmd-mono">helixsh agent-run</td><td class="cmd-desc">Run an agent task via HAPS v1 protocol.</td></tr>
+          <tr><td class="cmd-mono">helixsh arbitrate</td><td class="cmd-desc">Arbitrate between multiple agent responses (majority or weighted confidence).</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="tab-platform" class="cmd-panel">
+      <table class="cmd-table">
+        <thead><tr><th>Command</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="cmd-mono">helixsh nf-launch</td><td class="cmd-desc">Launch pipeline via Seqera Platform / nextflow launch (dry-run by default).</td></tr>
+          <tr><td class="cmd-mono">helixsh nf-auth</td><td class="cmd-desc">Show Seqera Platform authentication status.</td></tr>
+          <tr><td class="cmd-mono">helixsh tower-submit</td><td class="cmd-desc">Submit a pipeline run to Seqera Platform REST API.</td></tr>
+          <tr><td class="cmd-mono">helixsh tower-auth</td><td class="cmd-desc">Check Seqera Platform REST API authentication.</td></tr>
+          <tr><td class="cmd-mono">helixsh tower-status</td><td class="cmd-desc">Get run status from Seqera Platform by workflow ID.</td></tr>
+          <tr><td class="cmd-mono">helixsh tower-envs</td><td class="cmd-desc">List available Seqera Platform compute environments.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="tab-ai" class="cmd-panel">
+      <table class="cmd-table">
+        <thead><tr><th>Command</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="cmd-mono">helixsh mcp-check</td><td class="cmd-desc">Check if a capability is allowed through the MCP gateway.</td></tr>
+          <tr><td class="cmd-mono">helixsh mcp-propose</td><td class="cmd-desc">Store an AI-generated proposal for human review.</td></tr>
+          <tr><td class="cmd-mono">helixsh mcp-proposals</td><td class="cmd-desc">List all pending MCP proposals.</td></tr>
+          <tr><td class="cmd-mono">helixsh mcp-approve</td><td class="cmd-desc">Approve a proposal by ID.</td></tr>
+          <tr><td class="cmd-mono">helixsh mcp-execute</td><td class="cmd-desc">Execute an approved MCP proposal.</td></tr>
+          <tr><td class="cmd-mono">helixsh claude-plan</td><td class="cmd-desc">Generate a Claude-style plan and store it as a proposal.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- INSTALL -->
+<section class="section" id="install">
+  <div class="section-label">Installation</div>
+  <h2 class="section-title">Get up and running</h2>
+  <p class="section-sub">Requires Python ≥ 3.10. No external dependencies beyond the standard library.</p>
+
+  <div class="install-steps">
+    <div class="install-step">
+      <div class="step-num">1</div>
+      <h3>Clone the repo</h3>
+      <p>Clone from GitHub and enter the directory.</p>
+      <pre>git clone https://github.com/musicofthings/helixsh
+cd helixsh</pre>
+    </div>
+    <div class="install-step">
+      <div class="step-num">2</div>
+      <h3>Create a virtualenv</h3>
+      <p>Create and activate a Python virtual environment.</p>
+      <pre>python -m venv .venv
+source .venv/bin/activate
+# Windows: .venv\Scripts\activate</pre>
+    </div>
+    <div class="install-step">
+      <div class="step-num">3</div>
+      <h3>Install</h3>
+      <p>Install helixsh in editable mode.</p>
+      <pre>pip install -e .</pre>
+    </div>
+    <div class="install-step">
+      <div class="step-num">4</div>
+      <h3>Verify</h3>
+      <p>Run the environment check.</p>
+      <pre>helixsh doctor</pre>
+    </div>
+  </div>
+
+  <div style="margin-top: 2.5rem;">
+    <h3 style="margin-bottom: 1rem; font-size: 1rem;">Or use the self-contained executable</h3>
+    <pre>./scripts/package_local.sh
+./dist/helixsh.pyz doctor</pre>
+    <p style="color: var(--muted); font-size: 0.85rem; margin-top: 0.75rem;">
+      The <code>.pyz</code> archive is a self-contained Python zipapp — no venv, no PyPI, no internet required.
+    </p>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- FOOTER -->
+<footer>
+  <p>
+    <strong style="color: var(--text);">helixsh</strong> &mdash;
+    Built for bioinformaticians who want AI planning without AI execution. &nbsp;|&nbsp;
+    <a href="https://github.com/musicofthings/helixsh">GitHub</a> &nbsp;|&nbsp;
+    <a href="https://github.com/musicofthings/helixsh/issues">Issues</a>
+  </p>
+  <p style="margin-top: 0.5rem; font-size: 0.78rem;">Python ≥ 3.10 &nbsp;·&nbsp; POSIX-compatible &nbsp;·&nbsp; No external dependencies</p>
+</footer>
+
+<script>
+  function showTab(name) {
+    document.querySelectorAll('.cmd-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.cmd-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    event.target.classList.add('active');
+  }
+</script>
+</body>
+</html>
