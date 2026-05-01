@@ -4,44 +4,15 @@
   import Sidebar from "./components/Sidebar.svelte";
   import MainArea from "./components/MainArea.svelte";
   import StatusBar from "./components/StatusBar.svelte";
-  import { blocks, role, helixshPath } from "./store.js";
+  import { helixshPath } from "./store.js";
   import { invoke } from "@tauri-apps/api/core";
-  import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
 
   onMount(async () => {
-    // Resolve helixsh path for display
     try {
       const path = await invoke("get_helixsh_path");
       helixshPath.set(path);
     } catch {}
-
-    // Listen for streamed output lines
-    await listen("helixsh://output", (event) => {
-      const { invocationId, stream, line } = event.payload;
-      blocks.update((bs) => {
-        const idx = bs.findIndex((b) => b.id === invocationId);
-        if (idx === -1) return bs;
-        const block = { ...bs[idx] };
-        block.lines = [...block.lines, { stream, text: line }];
-        const updated = [...bs];
-        updated[idx] = block;
-        return updated;
-      });
-    });
-
-    // Listen for command completion
-    await listen("helixsh://done", (event) => {
-      const { invocationId, exitCode } = event.payload;
-      blocks.update((bs) => {
-        const idx = bs.findIndex((b) => b.id === invocationId);
-        if (idx === -1) return bs;
-        const block = { ...bs[idx], status: exitCode === 0 ? "success" : "error", exitCode, running: false };
-        const updated = [...bs];
-        updated[idx] = block;
-        return updated;
-      });
-    });
   });
 </script>
 

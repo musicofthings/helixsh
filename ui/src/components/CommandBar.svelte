@@ -1,5 +1,5 @@
 <script>
-  import { invoke } from "@tauri-apps/api/core";
+  import { invoke, Channel } from "@tauri-apps/api/core";
   import { blocks, role, strictMode, newBlockId } from "../store.js";
 
   let input = "";
@@ -90,8 +90,32 @@
       },
     ]);
 
+    const channel = new Channel();
+    channel.onmessage = (msg) => {
+      if (msg.event === "output") {
+        blocks.update((bs) => {
+          const idx = bs.findIndex((b) => b.id === id);
+          if (idx === -1) return bs;
+          const block = { ...bs[idx], lines: [...bs[idx].lines, { stream: msg.data.stream, text: msg.data.line }] };
+          const updated = [...bs];
+          updated[idx] = block;
+          return updated;
+        });
+      } else if (msg.event === "done") {
+        blocks.update((bs) => {
+          const idx = bs.findIndex((b) => b.id === id);
+          if (idx === -1) return bs;
+          const exitCode = msg.data.exitCode;
+          const block = { ...bs[idx], status: exitCode === 0 ? "success" : "error", exitCode, running: false };
+          const updated = [...bs];
+          updated[idx] = block;
+          return updated;
+        });
+      }
+    };
+
     try {
-      await invoke("run_helixsh", { invocationId: id, args });
+      await invoke("run_helixsh", { onEvent: channel, args });
     } catch (e) {
       blocks.update((bs) => {
         const idx = bs.findIndex((b) => b.id === id);

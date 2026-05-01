@@ -1,18 +1,24 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::process::Stdio;
-use tauri::{AppHandle, Emitter};
+use tauri::ipc::Channel;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+/// Streamed event sent through a Channel back to the JS frontend.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase", tag = "event", content = "data")]
+pub enum HelixEvent {
+    Output { stream: String, line: String },
+    Done { exit_code: i32 },
+}
+
+#[derive(Clone, Serialize)]
 pub struct CommandResult {
     pub exit_code: i32,
     pub stdout: String,
     pub stderr: String,
 }
 
-/// Resolve the helixsh executable: prefer a bundled sidecar .pyz,
-/// fall back to `helixsh` on $PATH, then `python -m helixsh`.
 fn helixsh_exe() -> (String, Vec<String>) {
     if let Ok(exe) = std::env::current_exe() {
         let sidecar = exe.parent().unwrap_or(std::path::Path::new(".")).join("helixsh.pyz");
@@ -27,39 +33,26 @@ fn helixsh_exe() -> (String, Vec<String>) {
     (python_exe(), vec!["-m".to_string(), "helixsh".to_string()])
 }
 
-/// Return the best available Python interpreter for the current platform.
-/// Uses compile-time cfg to avoid blocking the async runtime with probes.
 fn python_exe() -> String {
-    if cfg!(windows) {
-        "python".to_string()
-    } else {
-        "python3".to_string()
-    }
+    if cfg!(windows) { "python".to_string() } else { "python3".to_string() }
 }
 
-/// Search PATH for a `helixsh` (or `helixsh.exe` on Windows) binary.
-/// Uses `std::env::split_paths` for cross-platform PATH parsing.
 fn which_helixsh() -> Option<String> {
     let bin = if cfg!(windows) { "helixsh.exe" } else { "helixsh" };
     std::env::var_os("PATH").and_then(|path| {
         std::env::split_paths(&path).find_map(|dir| {
             let candidate = dir.join(bin);
-            if candidate.exists() {
-                Some(candidate.display().to_string())
-            } else {
-                None
-            }
+            if candidate.exists() { Some(candidate.display().to_string()) } else { None }
         })
     })
 }
 
-/// Run a helixsh command, streaming output lines as Tauri events.
-/// Each stdout/stderr line is emitted as `helixsh://output`.
-/// Completion is emitted as `helixsh://done` with the exit code.
+/// Stream a helixsh command's stdout/stderr back to the frontend via a Channel.
+/// The frontend creates a Channel and passes it; each line is a HelixEvent::Output;
+/// completion is HelixEvent::Done with the exit code.
 #[tauri::command]
 pub async fn run_helixsh(
-    app: AppHandle,
-    invocation_id: String,
+    on_event: Channel<HelixEvent>,
     args: Vec<String>,
 ) -> Result<(), String> {
     let (exe, mut prefix_args) = helixsh_exe();
@@ -75,51 +68,30 @@ pub async fn run_helixsh(
     let stdout = child.stdout.take().unwrap();
     let stderr = child.stderr.take().unwrap();
 
-    let app_stdout = app.clone();
-    let id_stdout = invocation_id.clone();
+    let ch_out = on_event.clone();
     let stdout_task = tokio::spawn(async move {
-        let mut reader = BufReader::new(stdout).lines();
-        while let Ok(Some(line)) = reader.next_line().await {
-            let _ = app_stdout.emit(
-                "helixsh://output",
-                serde_json::json!({
-                    "invocationId": id_stdout,
-                    "stream": "stdout",
-                    "line": line
-                }),
-            );
+        let mut lines = BufReader::new(stdout).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            let _ = ch_out.send(&HelixEvent::Output { stream: "stdout".into(), line });
         }
     });
 
-    let app_stderr = app.clone();
-    let id_stderr = invocation_id.clone();
+    let ch_err = on_event.clone();
     let stderr_task = tokio::spawn(async move {
-        let mut reader = BufReader::new(stderr).lines();
-        while let Ok(Some(line)) = reader.next_line().await {
-            let _ = app_stderr.emit(
-                "helixsh://output",
-                serde_json::json!({
-                    "invocationId": id_stderr,
-                    "stream": "stderr",
-                    "line": line
-                }),
-            );
+        let mut lines = BufReader::new(stderr).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            let _ = ch_err.send(&HelixEvent::Output { stream: "stderr".into(), line });
         }
     });
 
     let _ = tokio::join!(stdout_task, stderr_task);
     let status = child.wait().await.map_err(|e| e.to_string())?;
     let code = status.code().unwrap_or(-1);
-
-    let _ = app.emit(
-        "helixsh://done",
-        serde_json::json!({ "invocationId": invocation_id, "exitCode": code }),
-    );
-
+    let _ = on_event.send(&HelixEvent::Done { exit_code: code });
     Ok(())
 }
 
-/// Run a helixsh command and return captured output synchronously.
+/// Run a helixsh command to completion and return captured output.
 /// Used for lightweight sidebar queries (doctor, nf-list).
 #[tauri::command]
 pub async fn query_helixsh(args: Vec<String>) -> Result<CommandResult, String> {
@@ -139,24 +111,15 @@ pub async fn query_helixsh(args: Vec<String>) -> Result<CommandResult, String> {
     })
 }
 
-/// Return the resolved helixsh executable path for display in the status bar.
 #[tauri::command]
 pub fn get_helixsh_path() -> String {
     let (exe, args) = helixsh_exe();
-    if args.is_empty() {
-        exe
-    } else {
-        format!("{} {}", exe, args.join(" "))
-    }
+    if args.is_empty() { exe } else { format!("{} {}", exe, args.join(" ")) }
 }
 
-/// Window control actions forwarded from the custom frameless titlebar.
-/// Dragging is handled by CSS `-webkit-app-region: drag` — no Rust command needed.
+/// Window control actions forwarded from the custom titlebar.
 #[tauri::command]
-pub async fn window_action(
-    window: tauri::WebviewWindow,
-    action: String,
-) -> Result<(), String> {
+pub async fn window_action(window: tauri::Window, action: String) -> Result<(), String> {
     match action.as_str() {
         "minimize" => window.minimize().map_err(|e| e.to_string()),
         "maximize" => {
