@@ -1,14 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::process::Stdio;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct OutputLine {
-    pub stream: String, // "stdout" | "stderr"
-    pub line: String,
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CommandResult {
@@ -20,36 +14,23 @@ pub struct CommandResult {
 /// Resolve the helixsh executable: prefer a bundled sidecar .pyz,
 /// fall back to `helixsh` on $PATH, then `python -m helixsh`.
 fn helixsh_exe() -> (String, Vec<String>) {
-    // Check for bundled sidecar next to the binary
     if let Ok(exe) = std::env::current_exe() {
         let sidecar = exe.parent().unwrap_or(std::path::Path::new(".")).join("helixsh.pyz");
         if sidecar.exists() {
             return (python_exe(), vec![sidecar.display().to_string()]);
         }
     }
-    // Fall back to helixsh on PATH
     if which_helixsh().is_some() {
         let bin = if cfg!(windows) { "helixsh.exe" } else { "helixsh" };
         return (bin.to_string(), vec![]);
     }
-    // Last resort: python -m helixsh
     (python_exe(), vec!["-m".to_string(), "helixsh".to_string()])
 }
 
 /// Return the best available Python interpreter for the current platform.
-/// Windows exposes "py" (Python Launcher), "python", or "python3" in that order.
-/// Unix systems use "python3".
+/// Uses compile-time cfg to avoid blocking the async runtime with probes.
 fn python_exe() -> String {
     if cfg!(windows) {
-        for candidate in &["py", "python", "python3"] {
-            if std::process::Command::new(candidate)
-                .arg("--version")
-                .output()
-                .is_ok()
-            {
-                return candidate.to_string();
-            }
-        }
         "python".to_string()
     } else {
         "python3".to_string()
@@ -57,8 +38,7 @@ fn python_exe() -> String {
 }
 
 /// Search PATH for a `helixsh` (or `helixsh.exe` on Windows) binary.
-/// Uses `std::env::split_paths` for cross-platform PATH parsing
-/// (handles Windows `;` separator and drive letters correctly).
+/// Uses `std::env::split_paths` for cross-platform PATH parsing.
 fn which_helixsh() -> Option<String> {
     let bin = if cfg!(windows) { "helixsh.exe" } else { "helixsh" };
     std::env::var_os("PATH").and_then(|path| {
@@ -74,8 +54,8 @@ fn which_helixsh() -> Option<String> {
 }
 
 /// Run a helixsh command, streaming output lines as Tauri events.
-/// Each line is emitted as `helixsh://output` with an `OutputLine` payload.
-/// Final exit code is emitted as `helixsh://done`.
+/// Each stdout/stderr line is emitted as `helixsh://output`.
+/// Completion is emitted as `helixsh://done` with the exit code.
 #[tauri::command]
 pub async fn run_helixsh(
     app: AppHandle,
@@ -139,8 +119,8 @@ pub async fn run_helixsh(
     Ok(())
 }
 
-/// Run a helixsh command synchronously and return captured output.
-/// Used for lightweight queries (doctor, nf-list, pipeline-list).
+/// Run a helixsh command and return captured output synchronously.
+/// Used for lightweight sidebar queries (doctor, nf-list).
 #[tauri::command]
 pub async fn query_helixsh(args: Vec<String>) -> Result<CommandResult, String> {
     let (exe, mut prefix_args) = helixsh_exe();
@@ -159,7 +139,7 @@ pub async fn query_helixsh(args: Vec<String>) -> Result<CommandResult, String> {
     })
 }
 
-/// Return the resolved helixsh executable path for display in the UI.
+/// Return the resolved helixsh executable path for display in the status bar.
 #[tauri::command]
 pub fn get_helixsh_path() -> String {
     let (exe, args) = helixsh_exe();
@@ -170,15 +150,13 @@ pub fn get_helixsh_path() -> String {
     }
 }
 
-/// Window drag support for the custom titlebar.
+/// Window control actions forwarded from the custom frameless titlebar.
+/// Dragging is handled by CSS `-webkit-app-region: drag` — no Rust command needed.
 #[tauri::command]
-pub async fn start_drag(window: tauri::Window) -> Result<(), String> {
-    window.start_dragging().map_err(|e| e.to_string())
-}
-
-/// Minimise / maximise / close forwarded from the custom titlebar.
-#[tauri::command]
-pub async fn window_action(window: tauri::Window, action: String) -> Result<(), String> {
+pub async fn window_action(
+    window: tauri::WebviewWindow,
+    action: String,
+) -> Result<(), String> {
     match action.as_str() {
         "minimize" => window.minimize().map_err(|e| e.to_string()),
         "maximize" => {
@@ -195,12 +173,10 @@ pub async fn window_action(window: tauri::Window, action: String) -> Result<(), 
 
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             run_helixsh,
             query_helixsh,
             get_helixsh_path,
-            start_drag,
             window_action,
         ])
         .run(tauri::generate_context!())

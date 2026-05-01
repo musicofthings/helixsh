@@ -98,7 +98,7 @@
         if (idx === -1) return bs;
         const block = {
           ...bs[idx],
-          lines: [{ stream: "stderr", text: String(e) }],
+          lines: [...bs[idx].lines, { stream: "stderr", text: String(e) }],
           status: "error",
           exitCode: -1,
           running: false,
