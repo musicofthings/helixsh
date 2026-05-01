@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>helixsh — Bioinformatics-first AI shell for Nextflow</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --bg2: #161b22;
+      --bg3: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --accent2: #3fb950;
+      --accent3: #d2a8ff;
+      --accent4: #ffa657;
+      --danger: #f85149;
+      --code-bg: #1f2937;
+      --radius: 8px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 15px;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* NAV */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(13, 17, 23, 0.92);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      height: 52px;
+    }
+    nav .logo {
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--text);
+      letter-spacing: -0.5px;
+    }
+    nav .logo span { color: var(--accent); }
+    nav .nav-links {
+      display: flex;
+      gap: 1.4rem;
+      list-style: none;
+      margin-left: auto;
+      flex-wrap: wrap;
+    }
+    nav .nav-links a {
+      color: var(--muted);
+      font-size: 0.875rem;
+      transition: color 0.15s;
+    }
+    nav .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    /* HERO */
+    .hero {
+      text-align: center;
+      padding: 5rem 2rem 4rem;
+      background: radial-gradient(ellipse 80% 60% at 50% -10%, #1a2a4a 0%, transparent 70%);
+    }
+    .hero h1 {
+      font-size: clamp(2.2rem, 6vw, 3.8rem);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 1.2rem;
+    }
+    .hero h1 span { color: var(--accent); }
+    .hero p {
+      font-size: 1.15rem;
+      color: var(--muted);
+      max-width: 640px;
+      margin: 0 auto 2rem;
+    }
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-bottom: 2.5rem;
+    }
+    .badges img { height: 20px; border-radius: 3px; }
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.75rem;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.6rem 1.4rem;
+      border-radius: var(--radius);
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: opacity 0.15s, transform 0.1s;
+      cursor: pointer;
+    }
+    .btn:hover { opacity: 0.85; transform: translateY(-1px); text-decoration: none; }
+    .btn-primary { background: var(--accent); color: #0d1117; }
+    .btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+
+    /* INSTALL BANNER */
+    .install-banner {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.85rem 1.5rem;
+      max-width: 560px;
+      margin: 2.5rem auto 0;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.9rem;
+      color: var(--accent2);
+    }
+    .install-banner .prompt { color: var(--muted); user-select: none; }
+
+    /* SECTION */
+    section { padding: 4rem 2rem; max-width: 1100px; margin: 0 auto; }
+    section + section { border-top: 1px solid var(--border); }
+    h2 {
+      font-size: 1.7rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 0.4rem;
+    }
+    h2 .sub { color: var(--muted); font-weight: 400; font-size: 1rem; margin-left: 0.5rem; }
+    .section-intro { color: var(--muted); margin-bottom: 2rem; max-width: 680px; }
+
+    /* FEATURE GRID */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1rem;
+    }
+    .feature-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.4rem;
+      transition: border-color 0.2s, transform 0.15s;
+    }
+    .feature-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .feature-card .icon { font-size: 1.6rem; margin-bottom: 0.6rem; }
+    .feature-card h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.4rem; color: var(--text); }
+    .feature-card p { font-size: 0.83rem; color: var(--muted); line-height: 1.5; }
+
+    /* INSTALLATION */
+    .install-methods { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.25rem; }
+    .install-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.4rem;
+    }
+    .install-card h3 { font-size: 0.95rem; font-weight: 600; color: var(--accent4); margin-bottom: 0.6rem; }
+    .install-card p { font-size: 0.83rem; color: var(--muted); margin-bottom: 0.8rem; }
+
+    /* CODE BLOCKS */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.83rem;
+      line-height: 1.6;
+      color: #e6edf3;
+    }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.85em;
+      background: var(--code-bg);
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+      color: var(--accent3);
+    }
+    pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+
+    /* QUICKSTART */
+    .qs-steps { display: flex; flex-direction: column; gap: 1rem; }
+    .qs-step { display: grid; grid-template-columns: 2rem 1fr; gap: 0.8rem; align-items: start; }
+    .qs-step .num {
+      width: 2rem; height: 2rem;
+      background: var(--accent);
+      color: #0d1117;
+      font-weight: 700;
+      font-size: 0.85rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 0.1rem;
+    }
+
+    /* COMMAND REFERENCE */
+    .cmd-categories { display: flex; flex-direction: column; gap: 2.5rem; }
+    .cmd-category h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--accent3);
+      margin-bottom: 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .cmd-list { display: flex; flex-direction: column; gap: 0.6rem; }
+    .cmd-item {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 1rem;
+      align-items: baseline;
+      padding: 0.5rem 0;
+    }
+    .cmd-item code { color: var(--accent); }
+    .cmd-item .cmd-desc { font-size: 0.85rem; color: var(--muted); }
+    @media (max-width: 600px) {
+      .cmd-item { grid-template-columns: 1fr; gap: 0.25rem; }
+    }
+
+    /* TABLE */
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    th {
+      text-align: left;
+      padding: 0.65rem 1rem;
+      background: var(--bg3);
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 0.7rem 1rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--bg3); }
+    .tag {
+      display: inline-block;
+      padding: 0.15em 0.55em;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .tag-auditor { background: #1c3a5e; color: #58a6ff; }
+    .tag-analyst { background: #1a3a2e; color: #3fb950; }
+    .tag-admin   { background: #3a1a2e; color: #d2a8ff; }
+
+    /* ENV VARS */
+    .env-grid { display: flex; flex-direction: column; gap: 0.75rem; }
+    .env-item {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.2rem;
+    }
+    .env-item .env-name { font-family: monospace; color: var(--accent4); font-weight: 600; font-size: 0.9rem; }
+    .env-item .env-desc { font-size: 0.83rem; color: var(--muted); margin-top: 0.25rem; }
+
+    /* ARCHITECTURE */
+    .arch-diagram {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      overflow-x: auto;
+      font-family: monospace;
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.7;
+      white-space: pre;
+    }
+    .arch-diagram .hl { color: var(--accent); }
+    .arch-diagram .hl2 { color: var(--accent2); }
+    .arch-diagram .hl3 { color: var(--accent3); }
+
+    /* FOOTER */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2.5rem 2rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    footer a { color: var(--muted); }
+    footer a:hover { color: var(--text); }
+
+    /* RESPONSIVE */
+    @media (max-width: 768px) {
+      nav .nav-links { display: none; }
+      .hero { padding: 3rem 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <span class="logo"><span>helix</span>sh</span>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#install">Install</a></li>
+    <li><a href="#quickstart">Quick Start</a></li>
+    <li><a href="#commands">Commands</a></li>
+    <li><a href="#rbac">RBAC</a></li>
+    <li><a href="#env">Config</a></li>
+    <li><a href="https://github.com/musicofthings/helixsh">GitHub</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <h1><span>helix</span>sh</h1>
+  <p>Bioinformatics-first AI shell wrapper for Nextflow and nf-core — zero dependencies, dry-run safe, RBAC enforced.</p>
+  <div class="badges">
+    <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+" />
+    <img src="https://img.shields.io/badge/dependencies-zero-brightgreen" alt="Zero dependencies" />
+    <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license" />
+    <img src="https://img.shields.io/badge/nextflow-25.x-orange" alt="Nextflow 25.x" />
+  </div>
+  <div class="hero-actions">
+    <a class="btn btn-primary" href="#install">Get Started</a>
+    <a class="btn btn-secondary" href="https://github.com/musicofthings/helixsh">View on GitHub</a>
+    <a class="btn btn-secondary" href="#commands">Command Reference</a>
+  </div>
+  <div class="install-banner">
+    <span class="prompt">$</span>
+    <span>pip install -e . &amp;&amp; helixsh doctor</span>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section id="features">
+  <h2>Features</h2>
+  <p class="section-intro">50+ commands covering every stage of a bioinformatics workflow — from intent parsing to cloud cost estimation and audit trails.</p>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="icon">🧬</div>
+      <h3>Intent Parsing</h3>
+      <p>Natural-language → Nextflow plan. Say "run nf-core rnaseq on tumor-normal samples" and get a ready command.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">🚀</div>
+      <h3>Pipeline Execution</h3>
+      <p>Run nf-core pipelines with Docker, Podman, Singularity, Apptainer, or Conda. Dry-run by default — add <code>--execute</code> to go live.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">📋</div>
+      <h3>Samplesheet Tools</h3>
+      <p>Validate existing CSVs or auto-generate them by scanning a FASTQ directory for R1/R2 pairs.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">🗂️</div>
+      <h3>Reference Genomes</h3>
+      <p>Download and cache GRCh38, GRCh37, GRCm39, TAIR10 and more from Ensembl with SHA-256 verification.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">🐍</div>
+      <h3>Bioconda Integration</h3>
+      <p>Search, install packages, and create reproducible conda environments with strict channel priority.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">💰</div>
+      <h3>Cloud Cost Estimation</h3>
+      <p>Estimate AWS, GCP, and Azure on-demand and spot costs before you submit a single job.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">📊</div>
+      <h3>Trace Analysis</h3>
+      <p>Parse Nextflow <code>trace.txt</code> into per-process CPU/memory/duration summaries in seconds.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">☁️</div>
+      <h3>Seqera Platform</h3>
+      <p>Submit, monitor, and list runs on Seqera Platform (Tower) directly from your shell.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">🖥️</div>
+      <h3>HPC Modules</h3>
+      <p>Generate <code>modules.config</code> for Lmod / Environment Modules HPC clusters from your process definitions.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">🐍</div>
+      <h3>Snakemake Bridge</h3>
+      <p>Import rule-level resource declarations from Snakemake workflows into helixsh calibration.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">🔒</div>
+      <h3>RBAC Enforcement</h3>
+      <p>Auditor / Analyst / Admin roles enforced at the command level. Auditors get read-only access.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">📜</div>
+      <h3>Audit &amp; Provenance</h3>
+      <p>HMAC-signed JSONL audit log and SQLite provenance database for every command run.</p>
+    </div>
+  </div>
+</section>
+
+<!-- INSTALLATION -->
+<section id="install">
+  <h2>Installation</h2>
+  <p class="section-intro">Three ways to get helixsh — choose what fits your workflow. No PyPI dependencies required.</p>
+  <div class="install-methods">
+    <div class="install-card">
+      <h3>Option 1 — pip editable install</h3>
+      <p>Best for development and daily use.</p>
+      <pre>git clone https://github.com/musicofthings/helixsh
+cd helixsh
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+helixsh doctor</pre>
+    </div>
+    <div class="install-card">
+      <h3>Option 2 — single-file .pyz</h3>
+      <p>Copy the zipapp anywhere on <code>$PATH</code> — no venv needed.</p>
+      <pre>./scripts/package_local.sh
+./dist/helixsh.pyz doctor
+
+# Copy to PATH:
+cp dist/helixsh.pyz ~/.local/bin/helixsh</pre>
+    </div>
+    <div class="install-card">
+      <h3>Option 3 — run without installing</h3>
+      <p>Use Python module invocation directly from the repo.</p>
+      <pre>git clone https://github.com/musicofthings/helixsh
+cd helixsh
+python -m helixsh doctor</pre>
+    </div>
+  </div>
+
+  <div style="margin-top:2rem;">
+    <h3 style="font-size:1rem;font-weight:600;margin-bottom:0.8rem;color:var(--muted);">Requirements</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Requirement</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>Python 3.10+</code></td><td>No third-party packages required</td></tr>
+          <tr><td><code>Nextflow 25.x</code></td><td>Java 17+ must be on <code>$PATH</code></td></tr>
+          <tr><td>Container runtime</td><td>Docker, Podman, Singularity, or Apptainer (at least one)</td></tr>
+          <tr><td>conda / mamba</td><td>Optional — only for <code>-with-conda</code> workflows</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- QUICK START -->
+<section id="quickstart">
+  <h2>Quick Start</h2>
+  <p class="section-intro">From zero to a running pipeline in five steps.</p>
+  <div class="qs-steps">
+    <div class="qs-step">
+      <div class="num">1</div>
+      <div>
+        <div style="font-weight:600;margin-bottom:0.4rem;">Check your environment</div>
+        <pre>helixsh doctor</pre>
+      </div>
+    </div>
+    <div class="qs-step">
+      <div class="num">2</div>
+      <div>
+        <div style="font-weight:600;margin-bottom:0.4rem;">Parse natural-language intent into a plan</div>
+        <pre>helixsh intent "run nf-core rnaseq on tumor-normal samples using docker"</pre>
+      </div>
+    </div>
+    <div class="qs-step">
+      <div class="num">3</div>
+      <div>
+        <div style="font-weight:600;margin-bottom:0.4rem;">Generate a samplesheet from your FASTQ files</div>
+        <pre>helixsh samplesheet-generate --fastq-dir /data/fastq --pipeline rnaseq --out samplesheet.csv</pre>
+      </div>
+    </div>
+    <div class="qs-step">
+      <div class="num">4</div>
+      <div>
+        <div style="font-weight:600;margin-bottom:0.4rem;">Estimate cloud cost before running</div>
+        <pre>helixsh cost-estimate --cpu 32 --memory-gb 128 --hours 6 --provider aws</pre>
+      </div>
+    </div>
+    <div class="qs-step">
+      <div class="num">5</div>
+      <div>
+        <div style="font-weight:600;margin-bottom:0.4rem;">Run the pipeline (dry-run first, then add --execute)</div>
+        <pre># Preview the command
+helixsh run nf-core/rnaseq --runtime docker --input samplesheet.csv --resume
+
+# Run for real
+helixsh run nf-core/rnaseq --runtime docker --input samplesheet.csv --resume --execute</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMMAND REFERENCE -->
+<section id="commands">
+  <h2>Command Reference</h2>
+  <p class="section-intro">All commands support <code>--help</code>. Global flags: <code>--strict</code> (require explicit confirmation) and <code>--role auditor|analyst|admin</code> (RBAC).</p>
+  <div class="cmd-categories">
+
+    <div class="cmd-category">
+      <h3>🚀 Core Execution</h3>
+      <div class="cmd-list">
+        <div class="cmd-item"><code>run</code><span class="cmd-desc">Run an nf-core pipeline via Nextflow with container runtime selection. Dry-run by default; add <code>--execute</code> to run for real.</span></div>
+        <div class="cmd-item"><code>doctor</code><span class="cmd-desc">Check all required tools (nextflow, java, docker, conda…) and print their versions.</span></div>
+        <div class="cmd-item"><code>plan</code><span class="cmd-desc">Display planning guidance for building a Nextflow command.</span></div>
+        <div class="cmd-item"><code>posix-wrap</code><span class="cmd-desc">Render an explicit POSIX <code>exec sh -c</code> boundary wrapper around a command.</span></div>
+        <div class="cmd-item"><code>preflight</code><span class="cmd-desc">Run all pre-flight checks in one shot: schema, params, workflow, samplesheet, config, image digest.</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-category">
+      <h3>🧬 Intent Parsing</h3>
+      <div class="cmd-list">
+        <div class="cmd-item"><code>intent</code><span class="cmd-desc">Map a natural-language request to a concrete Nextflow plan. Detects assay, container runtime, and pipeline.</span></div>
+        <div class="cmd-item"><code>profile-suggest</code><span class="cmd-desc">Suggest a pipeline and Nextflow profile arguments based on <code>--assay</code> and <code>--reference</code>.</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-category">
+      <h3>📦 nf-core Pipelines</h3>
+      <div class="cmd-list">
+        <div class="cmd-item"><code>nf-list</code><span class="cmd-desc">List all curated nf-core pipelines with descriptions from the bundled registry.</span></div>
+        <div class="cmd-item"><code>nf-launch</code><span class="cmd-desc">Launch a pipeline using <code>nextflow launch</code> or Seqera Platform with full param support.</span></div>
+        <div class="cmd-item"><code>nf-auth</code><span class="cmd-desc">Show Seqera Platform authentication status (<code>TOWER_ACCESS_TOKEN</code>).</span></div>
+        <div class="cmd-item"><code>pipeline-list</code><span class="cmd-desc">List known pipelines with latest versions; <code>--refresh</code> to fetch from nf-core API.</span></div>
+        <div class="cmd-item"><code>pipeline-update</code><span class="cmd-desc">Check if a pinned pipeline version matches the latest release.</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-category">
+      <h3>📋 Samplesheet Tools</h3>
+      <div class="cmd-list">
+        <div class="cmd-item"><code>samplesheet-validate</code><span class="cmd-desc">Validate an nf-core samplesheet CSV for required columns, file existence, and data integrity.</span></div>
+        <div class="cmd-item"><code>samplesheet-generate</code><span class="cmd-desc">Auto-generate an nf-core samplesheet by scanning a FASTQ directory for R1/R2 pairs.</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-category">
+      <h3>🗂️ Reference Genomes</h3>
+      <div class="cmd-list">
+        <div class="cmd-item"><code>ref-list</code><span class="cmd-desc">List all reference genomes in the built-in catalogue (GRCh38, GRCh37, GRCm39, TAIR10…).</span></div>
+        <div class="cmd-item"><code>ref-download</code><span class="cmd-desc">Download and cache a reference genome FASTA + GTF from Ensembl with SHA-256 checksums.</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-category">
+      <h3>🐍 Bioconda Integration</h3>
+      <div class="cmd-list">
+        <div class="cmd-item"><code>conda-search</code><span class="cmd-desc">Search the Bioconda channel for a tool (e.g. <code>samtools</code>, <code>star</code>, <code>gatk4</code>).</span></div>
+        <div class="cmd-item"><code>conda-install</code><span class="cmd-desc">Install a Bioconda package into the active conda environment (dry-run by default).</span></div>
+        <div class="cmd-item"><code>conda-env-create</code><span class="cmd-desc">Create a new conda environment with a specified set of Bioconda packages.</span></div>
+        <div class="cmd-item"><code>conda-env-export</code><span class="cmd-desc">Export the active conda environment to a reproducible <code>environment.yml</code>.</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-category">
+      <h3>📊 Trace &amp; Cost Analysis</h3>
+      <div class="cmd-list">
+        <div class="cmd-item"><code>trace-summary</code><span class="cmd-desc">Parse a Nextflow <code>trace.txt</code> into per-process CPU, memory, and duration summaries.</span></div>
+        <div class="cmd-item"><code>cost-estimate</code><span class="cmd-desc">Estimate on-demand and spot cloud costs for AWS, GCP, or Azure given CPU/memory/hours.</span></div>
+        <div class="cmd-item"><code>cost-report</code><span class="cmd-desc">Generate a cost report from a Nextflow trace file and cloud provider pricing.</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-category">
+      <h3>☁️ Seqera Platform (Tower)</h3>
+      <div class="cmd-list">
+        <div class="cmd-item"><code>tower-submit</code><span class="cmd-desc">Submit a pipeline run to Seqera Platform with work-dir, params, and compute environment.</span></div>
+        <div class="cmd-item"><code>tower-list</code><span class="cmd-desc">List recent pipeline runs on Seqera Platform.</span></div>
+        <div class="cmd-item"><code>tower-status</code><span class="cmd-desc">Get the status of a specific Seqera Platform run by ID.</span></div>
+        <div class="cmd-item"><code>tower-cancel</code><span class="cmd-desc">Cancel a running Seqera Platform run.</span></div>
+        <div class="cmd-item"><code>tower-envs</code><span class="cmd-desc">List available compute environments on the configured Seqera workspace.</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-category">
+      <h3>🖥️ HPC Environment Modules</h3>
+      <div class="cmd-list">
+        <div class="cmd-item"><code>hpc-modules-gen</code><span class="cmd-desc">Generate a <code>modules.config</code> for Lmod / Environment Modules clusters from process definitions.</span></div>
+        <div class="cmd-item"><code>hpc-profile-gen</code><span class="cmd-desc">Generate a Nextflow HPC profile block (SLURM/PBS/LSF) for a target cluster.</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-category">
+      <h3>🐍 Snakemake Bridge</h3>
+      <div class="cmd-list">
+        <div class="cmd-item"><code>snakemake-import</code><span class="cmd-desc">Import rule-level resource declarations from a Snakefile into helixsh calibration.</span></div>
+        <div class="cmd-item"><code>snakemake-convert</code><span class="cmd-desc">Convert a Snakemake rule to a Nextflow DSL2 process stub.</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-category">
+      <h3>✅ Schema &amp; Validation</h3>
+      <div class="cmd-list">
+        <div class="cmd-item"><code>schema-validate</code><span class="cmd-desc">Validate a <code>params.json</code> against a pipeline's <code>nextflow_schema.json</code>.</span></div>
+        <div class="cmd-item"><code>schema-lint</code><span class="cmd-desc">Lint a <code>nextflow_schema.json</code> for common structural issues.</span></div>
+        <div class="cmd-item"><code>config-check</code><span class="cmd-desc">Check a <code>nextflow.config</code> for deprecated options and syntax issues.</span></div>
+        <div class="cmd-item"><code>process-lint</code><span class="cmd-desc">Lint Nextflow DSL2 process definitions using the brace-aware parser.</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-category">
+      <h3>📐 Resource Estimation</h3>
+      <div class="cmd-list">
+        <div class="cmd-item"><code>resource-estimate</code><span class="cmd-desc">Estimate CPU and memory requirements for a pipeline based on sample count and assay type.</span></div>
+        <div class="cmd-item"><code>resource-calibrate</code><span class="cmd-desc">Calibrate resource estimates from a completed trace file for future runs.</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-category">
+      <h3>🤖 AI Planning (MCP)</h3>
+      <div class="cmd-list">
+        <div class="cmd-item"><code>mcp-propose</code><span class="cmd-desc">Request a Claude Code pipeline proposal via the Model Context Protocol.</span></div>
+        <div class="cmd-item"><code>mcp-approve</code><span class="cmd-desc">Approve and execute a previously generated MCP pipeline proposal.</span></div>
+        <div class="cmd-item"><code>mcp-status</code><span class="cmd-desc">Show the status of the most recent MCP proposal.</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-category">
+      <h3>🔍 Diagnostics</h3>
+      <div class="cmd-list">
+        <div class="cmd-item"><code>diag</code><span class="cmd-desc">Run extended diagnostics including tool versions, env vars, and config file locations.</span></div>
+        <div class="cmd-item"><code>version</code><span class="cmd-desc">Print the helixsh version.</span></div>
+        <div class="cmd-item"><code>env-check</code><span class="cmd-desc">Check all expected environment variables and report missing or misconfigured ones.</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-category">
+      <h3>📜 Audit &amp; Provenance</h3>
+      <div class="cmd-list">
+        <div class="cmd-item"><code>audit-log</code><span class="cmd-desc">View the HMAC-signed JSONL audit log of all helixsh command invocations.</span></div>
+        <div class="cmd-item"><code>audit-verify</code><span class="cmd-desc">Verify the integrity of audit log entries using stored HMAC signatures.</span></div>
+        <div class="cmd-item"><code>provenance-show</code><span class="cmd-desc">Show provenance records from the SQLite database for a given run or pipeline.</span></div>
+        <div class="cmd-item"><code>provenance-export</code><span class="cmd-desc">Export provenance records to JSON or CSV for reporting.</span></div>
+      </div>
+    </div>
+
+    <div class="cmd-category">
+      <h3>🔒 Security &amp; Compliance</h3>
+      <div class="cmd-list">
+        <div class="cmd-item"><code>image-verify</code><span class="cmd-desc">Verify a container image digest against an expected SHA-256 before use.</span></div>
+        <div class="cmd-item"><code>sbom-generate</code><span class="cmd-desc">Generate a Software Bill of Materials for the current pipeline environment.</span></div>
+        <div class="cmd-item"><code>secret-scan</code><span class="cmd-desc">Scan pipeline config and params files for accidentally embedded secrets.</span></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- RBAC -->
+<section id="rbac">
+  <h2>RBAC <span class="sub">Role-Based Access Control</span></h2>
+  <p class="section-intro">Pass <code>--role &lt;role&gt;</code> to enforce access controls. Default role is <code>analyst</code>.</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Role</th><th>Permitted Operations</th><th>Restricted Operations</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tag tag-auditor">auditor</span></td>
+          <td>Read-only: <code>doctor</code>, <code>nf-list</code>, <code>pipeline-list</code>, <code>ref-list</code>, <code>trace-summary</code>, <code>audit-log</code>, <code>provenance-show</code>, <code>diag</code></td>
+          <td>All write/execute commands blocked</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-analyst">analyst</span></td>
+          <td>Everything auditor can do, plus: <code>run</code>, <code>intent</code>, <code>samplesheet-*</code>, <code>ref-download</code>, <code>tower-submit</code>, <code>tower-cancel</code>, <code>cost-*</code>, <code>mcp-*</code></td>
+          <td>conda environment management, security scanning</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-admin">admin</span></td>
+          <td>All commands including: <code>conda-install</code>, <code>conda-env-create</code>, <code>sbom-generate</code>, <code>secret-scan</code>, <code>audit-verify</code>, <code>provenance-export</code></td>
+          <td>None</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <pre style="margin-top:1rem;"># Run as auditor (read-only)
+helixsh --role auditor audit-log
+
+# Run as admin to install a package
+helixsh --role admin conda-install samtools --execute
+
+# Strict mode: require --execute and --yes everywhere
+helixsh --strict --role analyst run nf-core/rnaseq --runtime docker --input s.csv</pre>
+</section>
+
+<!-- ENV VARS -->
+<section id="env">
+  <h2>Environment Variables <span class="sub">&amp; Configuration</span></h2>
+  <p class="section-intro">helixsh reads these environment variables at startup. All are optional unless the corresponding feature is used.</p>
+  <div class="env-grid">
+    <div class="env-item">
+      <div class="env-name">TOWER_ACCESS_TOKEN</div>
+      <div class="env-desc">Seqera Platform personal access token. Required for <code>tower-*</code> commands.</div>
+    </div>
+    <div class="env-item">
+      <div class="env-name">TOWER_API_ENDPOINT</div>
+      <div class="env-desc">Seqera Platform API base URL. Defaults to <code>https://api.cloud.seqera.io</code>. Override for self-hosted deployments.</div>
+    </div>
+    <div class="env-item">
+      <div class="env-name">TOWER_WORKSPACE_ID</div>
+      <div class="env-desc">Seqera Platform workspace ID. Used by <code>tower-submit</code>, <code>tower-list</code>, and <code>tower-envs</code>.</div>
+    </div>
+    <div class="env-item">
+      <div class="env-name">HELIXSH_AUDIT_FILE</div>
+      <div class="env-desc">Path to the HMAC-signed JSONL audit log. Defaults to <code>~/.helixsh/audit.jsonl</code>.</div>
+    </div>
+    <div class="env-item">
+      <div class="env-name">HELIXSH_PROVENANCE_DB</div>
+      <div class="env-desc">Path to the SQLite provenance database. Defaults to <code>~/.helixsh/provenance.db</code>.</div>
+    </div>
+  </div>
+
+  <div style="margin-top:2rem;">
+    <h3 style="font-size:1rem;font-weight:600;margin-bottom:0.8rem;">Example shell setup</h3>
+    <pre># ~/.bashrc or ~/.zshrc
+export TOWER_ACCESS_TOKEN="your-token-here"
+export TOWER_WORKSPACE_ID="12345678"
+export HELIXSH_AUDIT_FILE="$HOME/.helixsh/audit.jsonl"
+export HELIXSH_PROVENANCE_DB="$HOME/.helixsh/provenance.db"</pre>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <h2>Architecture</h2>
+  <p class="section-intro">helixsh is a pure Python stdlib CLI — no external dependencies, no hidden network calls.</p>
+  <div class="arch-diagram">┌─────────────────────────────────────────────────────────────┐
+│                        helixsh CLI                          │
+│                   (src/helixsh/cli.py)                      │
+└────────┬──────────────────────────────────────┬────────────┘
+         │                                      │
+    ┌────▼────┐                          ┌──────▼──────┐
+    │  RBAC   │                          │   Intent    │
+    │ Enforcer│                          │   Parser    │
+    └────┬────┘                          └──────┬──────┘
+         │                                      │
+    ┌────▼──────────────────────────────────────▼────┐
+    │              Command Dispatcher                 │
+    │  run │ samplesheet │ ref │ conda │ tower │ ...  │
+    └────┬──────────────────────────────────────┬────┘
+         │                                      │
+    ┌────▼────────────┐               ┌─────────▼──────────┐
+    │  Nextflow / nf  │               │   Seqera Platform  │
+    │  (subprocess)   │               │   REST API         │
+    └─────────────────┘               └────────────────────┘
+         │
+    ┌────▼──────────────────────────────────────┐
+    │           Audit &amp; Provenance              │
+    │  HMAC-signed JSONL  │  SQLite DB          │
+    └───────────────────────────────────────────┘</div>
+</section>
+
+<!-- LOCAL DEV -->
+<section id="dev">
+  <h2>Local Development</h2>
+  <pre># Clone and set up
+git clone https://github.com/musicofthings/helixsh
+cd helixsh
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+
+# Run tests
+python -m pytest
+
+# Build the single-file zipapp
+./scripts/package_local.sh
+./dist/helixsh.pyz doctor</pre>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p style="margin-bottom:0.5rem;">
+    <strong>helixsh</strong> — Bioinformatics-first AI shell for Nextflow and nf-core
+  </p>
+  <p>
+    <a href="https://github.com/musicofthings/helixsh">GitHub</a> &nbsp;·&nbsp;
+    <a href="https://github.com/musicofthings/helixsh/issues">Issues</a> &nbsp;·&nbsp;
+    <a href="https://github.com/musicofthings/helixsh/blob/main/LICENSE">MIT License</a>
+  </p>
+  <p style="margin-top:1rem;font-size:0.78rem;">Built with zero dependencies. Python 3.10+.</p>
+</footer>
+
+</body>
+</html>

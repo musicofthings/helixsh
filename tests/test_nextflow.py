@@ -10,12 +10,17 @@ def test_normalize_pipeline_accepts_qualified_name():
 
 
 def test_validate_runtime_rejects_invalid():
+    # "kubernetes" is not a supported runtime profile
     try:
-        validate_runtime("conda")
+        validate_runtime("kubernetes")
     except HelixshError as exc:
         assert "Unsupported runtime" in str(exc)
     else:
         raise AssertionError("expected HelixshError")
+
+
+def test_validate_runtime_accepts_conda():
+    assert validate_runtime("conda") == "conda"
 
 
 def test_build_command():

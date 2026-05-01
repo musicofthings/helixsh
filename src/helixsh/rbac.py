@@ -4,11 +4,53 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+# Permissions shared by all authenticated roles
+_READ_ONLY = {
+    "doctor", "explain", "plan", "roadmap-status",
+    "audit-export", "audit-verify", "audit-sign", "audit-verify-signature", "audit-show",
+    "rbac-check", "report",
+    "mcp-check", "mcp-proposals",
+    "image-check", "context-check", "offline-check", "preflight",
+    "provenance", "posix-wrap",
+    "resource-estimate", "profile-suggest",
+    # Read-only pipeline intelligence
+    "nf-list", "nf-auth",
+    "ref-list", "pipeline-list",
+    "envmodules-list",
+    "tower-auth", "tower-status", "tower-envs",
+    "trace-summary",
+    "cost-estimate",
+}
+
+# Permissions available to analysts (pipeline operators)
+_ANALYST_EXTRA = {
+    "run", "intent", "validate-schema",
+    "parse-workflow", "diagnose", "cache-report",
+    "mcp-propose", "mcp-approve", "mcp-execute", "claude-plan",
+    "fit-calibration",
+    "conda-search", "conda-env",
+    "execution-start", "execution-finish",
+    "agent-run", "arbitrate", "compliance-check",
+    # New feature commands
+    "nf-launch",
+    "samplesheet-validate", "samplesheet-generate",
+    "ref-download",
+    "pipeline-update",
+    "envmodules-wrap",
+    "tower-submit",
+    "snakemake-import",
+}
+
+# Admin-only additions (e.g. installing system-wide packages)
+_ADMIN_EXTRA = {
+    "conda-install",
+}
 
 ROLE_PERMISSIONS = {
-    "admin": {"run", "doctor", "explain", "plan", "intent", "validate-schema", "mcp-check", "audit-export", "parse-workflow", "diagnose", "cache-report", "rbac-check", "report", "profile-suggest", "provenance", "image-check"},
-    "analyst": {"run", "doctor", "explain", "plan", "intent", "validate-schema", "mcp-check", "audit-export", "parse-workflow", "diagnose", "cache-report", "rbac-check", "report", "profile-suggest", "provenance", "image-check"},
-    "auditor": {"doctor", "explain", "plan", "mcp-check", "audit-export", "rbac-check", "report", "provenance", "image-check"},
+    "admin": _READ_ONLY | _ANALYST_EXTRA | _ADMIN_EXTRA,
+    "analyst": _READ_ONLY | _ANALYST_EXTRA,
+    # auditor: strictly read-only; cannot execute pipelines or approve proposals
+    "auditor": _READ_ONLY,
 }
 
 
