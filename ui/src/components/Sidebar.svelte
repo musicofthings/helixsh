@@ -15,20 +15,19 @@
   async function loadPipelines() {
     try {
       const res = await invoke("query_helixsh", { args: ["nf-list"] });
-      pipelineList.set(res.stdout.trim().split("\n").filter(Boolean));
+      const parsed = JSON.parse(res.stdout);
+      pipelineList.set(parsed.map((p) => p.name));
     } catch {}
   }
 
   function parseDoctor(text) {
-    const lines = text.split("\n");
-    return lines
-      .filter((l) => l.includes(":"))
-      .map((l) => {
-        const [tool, ...rest] = l.split(":");
-        const val = rest.join(":").trim();
-        const ok = !val.toLowerCase().includes("not found") && val !== "";
-        return { tool: tool.trim(), value: val || "not found", ok };
-      });
+    return text.split("\n").filter((l) => l.trim()).map((l) => {
+      const parts = l.trim().split(/\s+/);
+      const tool = parts[0];
+      const state = parts[1];
+      const details = parts.slice(2).join(" ");
+      return { tool, value: details || "not found", ok: state === "ok" };
+    });
   }
 
   onMount(() => {
