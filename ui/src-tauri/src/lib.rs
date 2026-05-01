@@ -24,21 +24,46 @@ fn helixsh_exe() -> (String, Vec<String>) {
     if let Ok(exe) = std::env::current_exe() {
         let sidecar = exe.parent().unwrap_or(std::path::Path::new(".")).join("helixsh.pyz");
         if sidecar.exists() {
-            return ("python3".to_string(), vec![sidecar.display().to_string()]);
+            return (python_exe(), vec![sidecar.display().to_string()]);
         }
     }
     // Fall back to helixsh on PATH
     if which_helixsh().is_some() {
-        return ("helixsh".to_string(), vec![]);
+        let bin = if cfg!(windows) { "helixsh.exe" } else { "helixsh" };
+        return (bin.to_string(), vec![]);
     }
     // Last resort: python -m helixsh
-    ("python3".to_string(), vec!["-m".to_string(), "helixsh".to_string()])
+    (python_exe(), vec!["-m".to_string(), "helixsh".to_string()])
 }
 
+/// Return the best available Python interpreter for the current platform.
+/// Windows exposes "py" (Python Launcher), "python", or "python3" in that order.
+/// Unix systems use "python3".
+fn python_exe() -> String {
+    if cfg!(windows) {
+        for candidate in &["py", "python", "python3"] {
+            if std::process::Command::new(candidate)
+                .arg("--version")
+                .output()
+                .is_ok()
+            {
+                return candidate.to_string();
+            }
+        }
+        "python".to_string()
+    } else {
+        "python3".to_string()
+    }
+}
+
+/// Search PATH for a `helixsh` (or `helixsh.exe` on Windows) binary.
+/// Uses `std::env::split_paths` for cross-platform PATH parsing
+/// (handles Windows `;` separator and drive letters correctly).
 fn which_helixsh() -> Option<String> {
-    std::env::var("PATH").ok().and_then(|path| {
-        path.split(':').find_map(|dir| {
-            let candidate = std::path::Path::new(dir).join("helixsh");
+    let bin = if cfg!(windows) { "helixsh.exe" } else { "helixsh" };
+    std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path).find_map(|dir| {
+            let candidate = dir.join(bin);
             if candidate.exists() {
                 Some(candidate.display().to_string())
             } else {
