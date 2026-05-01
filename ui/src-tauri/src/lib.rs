@@ -72,7 +72,7 @@ pub async fn run_helixsh(
     let stdout_task = tokio::spawn(async move {
         let mut lines = BufReader::new(stdout).lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            let _ = ch_out.send(&HelixEvent::Output { stream: "stdout".into(), line });
+            let _ = ch_out.send(HelixEvent::Output { stream: "stdout".into(), line });
         }
     });
 
@@ -80,14 +80,14 @@ pub async fn run_helixsh(
     let stderr_task = tokio::spawn(async move {
         let mut lines = BufReader::new(stderr).lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            let _ = ch_err.send(&HelixEvent::Output { stream: "stderr".into(), line });
+            let _ = ch_err.send(HelixEvent::Output { stream: "stderr".into(), line });
         }
     });
 
     let _ = tokio::join!(stdout_task, stderr_task);
     let status = child.wait().await.map_err(|e| e.to_string())?;
     let code = status.code().unwrap_or(-1);
-    let _ = on_event.send(&HelixEvent::Done { exit_code: code });
+    let _ = on_event.send(HelixEvent::Done { exit_code: code });
     Ok(())
 }
 
@@ -119,7 +119,7 @@ pub fn get_helixsh_path() -> String {
 
 /// Window control actions forwarded from the custom titlebar.
 #[tauri::command]
-pub async fn window_action(window: tauri::Window, action: String) -> Result<(), String> {
+pub async fn window_action(window: tauri::WebviewWindow, action: String) -> Result<(), String> {
     match action.as_str() {
         "minimize" => window.minimize().map_err(|e| e.to_string()),
         "maximize" => {
