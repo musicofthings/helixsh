@@ -1,47 +1,105 @@
 # helixsh
 
-**Bioinformatics-first AI shell for Nextflow / nf-core**
+**Bioinformatics-first AI shell for Nextflow and nf-core.**
 
-helixsh is a POSIX-respecting command-line tool that understands bioinformatics intent, validates Nextflow/nf-core workflows, enforces container policy, estimates resources, and delegates all real execution to deterministic tools. AI is a planner here — not an executor.
+helixsh is a zero-dependency Python CLI that wraps Nextflow and nf-core pipelines with intent parsing, schema validation, resource estimation, audit trails, cloud cost estimates, HPC environment module generation, Seqera Platform integration, and more — all without any PyPI dependencies beyond Python 3.10+.
+
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org)
+[![Zero dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 ---
 
-## Core Principles
+## Table of Contents
 
-1. **POSIX execution boundary** — final execution is always real `sh`/`bash` commands.
-2. **Nextflow is the workflow authority** — helixsh plans, validates, explains, and diagnoses; it does not replace Nextflow.
-3. **Container-first execution** — Docker / Podman / Singularity are mandatory.
-4. **LLM as planner, not executor** — AI proposes plans and fixes; helixsh decides and executes.
-5. **Offline-capable by design** — local reasoning, cached schemas, and optional internet access.
-6. **Dry-run by default** — nothing runs without `--execute`.
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Commands Reference](#commands-reference)
+  - [Core Execution](#core-execution)
+  - [Intent Parsing](#intent-parsing)
+  - [nf-core Pipelines](#nf-core-pipelines)
+  - [Samplesheet Tools](#samplesheet-tools)
+  - [Reference Genomes](#reference-genomes)
+  - [Bioconda Integration](#bioconda-integration)
+  - [Trace & Cost Analysis](#trace--cost-analysis)
+  - [Seqera Platform (Tower)](#seqera-platform-tower)
+  - [HPC Environment Modules](#hpc-environment-modules)
+  - [Snakemake Bridge](#snakemake-bridge)
+  - [Schema & Validation](#schema--validation)
+  - [Resource Estimation](#resource-estimation)
+  - [AI Planning (MCP)](#ai-planning-mcp)
+  - [Diagnostics](#diagnostics)
+  - [Audit & Provenance](#audit--provenance)
+  - [Security & Compliance](#security--compliance)
+- [RBAC: Role-Based Access](#rbac-role-based-access)
+- [Environment Variables](#environment-variables)
+- [Configuration](#configuration)
+- [Architecture](#architecture)
+- [Local Development](#local-development)
+- [Packaging](#packaging)
+
+---
+
+## Features
+
+| Category | Capabilities |
+|---|---|
+| **Execution** | Nextflow run with Docker, Podman, Singularity, Apptainer, Conda |
+| **Intent** | Natural-language → Nextflow plan (RNA-seq, WGS, WES, ChIP-seq, ATAC-seq, …) |
+| **Pipelines** | 20-pipeline bundled registry with version checks |
+| **Samplesheets** | Validate and auto-generate nf-core CSV samplesheets |
+| **References** | Download and cache GRCh38, GRCh37, GRCm39, TAIR10, and more |
+| **Bioconda** | Search, install packages, create environments (dry-run safe) |
+| **Tracing** | Parse Nextflow `trace.txt` into per-process summaries |
+| **Cost** | AWS / GCP / Azure on-demand and spot cost estimates |
+| **Tower** | Submit, monitor, and list compute envs on Seqera Platform |
+| **HPC** | Generate `modules.config` for Lmod / Environment Modules clusters |
+| **Snakemake** | Import rule-level resource declarations into helixsh calibration |
+| **Audit** | SQLite provenance DB, HMAC-signed JSONL audit log |
+| **RBAC** | Auditor / Analyst / Admin roles with per-command enforcement |
+| **MCP** | Claude Code proposal → approve → execute pipeline |
 
 ---
 
 ## Installation
 
-**Requirements:** Python ≥ 3.10
+### Option 1 — pip (editable install)
 
 ```bash
 git clone https://github.com/musicofthings/helixsh
 cd helixsh
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -e .
+helixsh doctor
 ```
 
-**Self-contained executable (no venv needed):**
+### Option 2 — single-file executable (`.pyz`)
+
+Build a self-contained zipapp that runs on any Python 3.10+ without a venv:
 
 ```bash
 ./scripts/package_local.sh
 ./dist/helixsh.pyz doctor
 ```
 
-**Desktop integration (macOS/Linux):**
+Copy `dist/helixsh.pyz` anywhere on your `$PATH` and rename it `helixsh`.
+
+### Option 3 — run without installing
 
 ```bash
-./scripts/install_desktop.sh    # install
-./scripts/uninstall_desktop.sh  # remove
+python -m helixsh doctor
 ```
+
+### Requirements
+
+| Requirement | Notes |
+|---|---|
+| Python 3.10+ | No third-party packages needed |
+| Nextflow 25.x | `java` 17+ must be on `$PATH` |
+| Docker / Podman / Singularity / Apptainer | At least one container runtime |
+| conda / mamba (optional) | For `-with-conda` workflows |
 
 ---
 
@@ -51,520 +109,945 @@ pip install -e .
 # Check your environment
 helixsh doctor
 
-# Dry-run an RNA-seq pipeline
-helixsh run nf-core rnaseq --runtime docker --input samplesheet.csv
+# Parse a natural-language intent into a Nextflow plan
+helixsh intent "run nf-core rnaseq on tumor-normal samples using docker"
 
-# Execute it
-helixsh run nf-core rnaseq --runtime docker --input samplesheet.csv --execute
+# Suggest a pipeline and profile for an assay
+helixsh profile-suggest --assay wgs --reference GRCh38
 
-# Natural language → Nextflow plan
-helixsh intent "run nf-core rnaseq on tumor-normal samples use docker resume"
+# Validate a samplesheet
+helixsh samplesheet-validate --file samplesheet.csv --pipeline rnaseq
 
-# Strict mode for clinical use (requires --execute --yes to run)
-helixsh --strict run nf-core sarek --runtime singularity --input samples.csv --execute --yes
+# Auto-generate a samplesheet from a FASTQ directory
+helixsh samplesheet-generate --fastq-dir /data/fastq --pipeline rnaseq --out samplesheet.csv
+
+# Run an nf-core pipeline (dry-run by default, add --execute to run for real)
+helixsh run nf-core/rnaseq --runtime docker --input samplesheet.csv --resume
+
+# Estimate cloud cost before submitting
+helixsh cost-estimate --cpu 32 --memory-gb 128 --hours 6 --provider aws
+
+# View Nextflow trace summary
+helixsh trace-summary --file results/pipeline_info/trace.txt
+
+# Download a reference genome
+helixsh ref-download --genome GRCh38 --cache-root /ref --execute
+
+# Submit to Seqera Platform
+helixsh tower-submit --pipeline nf-core/rnaseq --profile docker \
+    --work-dir s3://my-bucket/work --execute
 ```
 
 ---
 
-## Command Reference
+## Commands Reference
+
+Global flags available on every command:
+
+```
+helixsh [--strict] [--role auditor|analyst|admin] <command> [options]
+```
+
+- `--strict` — require explicit `--execute` and `--yes` for all side-effecting commands
+- `--role` — enforce RBAC policy (default: `analyst`)
+
+---
 
 ### Core Execution
 
-| Command | Description |
-|---------|-------------|
-| `helixsh run nf-core <pipeline>` | Plan or execute an nf-core pipeline via Nextflow |
-| `helixsh doctor` | Check environment: Nextflow, Docker, Python, container runtimes |
-| `helixsh explain last` | Show the last planned command with provenance hash |
-| `helixsh plan` | Display roadmap and planning guidance |
-| `helixsh intent "<text>"` | Parse natural language into a Nextflow parameter plan |
+#### `run`
 
-**`run` flags:**
-
-```
---runtime docker|podman|singularity|apptainer
---input <samplesheet.csv>
---outdir <results/>
---resume
---offline
---execute          (required to actually run)
---yes              (required in --strict mode)
---nf-arg <flag>    (pass extra flags to nextflow, repeatable)
---org <org>        (default: nf-core)
-```
-
-**RBAC-aware execution:**
+Run an nf-core pipeline via Nextflow.
 
 ```bash
-helixsh --role analyst  run nf-core rnaseq ...   # default role
-helixsh --role auditor  doctor
-helixsh --role viewer   explain last
+helixsh run nf-core/rnaseq \
+    --runtime docker \
+    --input samplesheet.csv \
+    --resume \
+    --outdir results/
+
+# With additional nextflow args
+helixsh run nf-core/sarek \
+    --runtime singularity \
+    --input samplesheet.csv \
+    -- --genome GRCh38 --tools haplotypecaller
+```
+
+Options:
+
+| Flag | Description |
+|---|---|
+| `--runtime` | `docker`, `podman`, `singularity`, `apptainer`, `conda` |
+| `--input` | Path to samplesheet CSV |
+| `--resume` | Add `-resume` to resume from cache |
+| `--outdir` | Output directory |
+| `--offline` | Add `-offline` flag (use cached containers) |
+| `--execute` | Actually run (default is dry-run preview) |
+
+#### `doctor`
+
+Check that all required tools are installed and show their versions.
+
+```bash
+helixsh doctor
+```
+
+Checks: `nextflow`, `java`, `docker`, `podman`, `singularity`, `apptainer`, `conda`, `mamba`, `micromamba`, `git`.
+
+#### `plan`
+
+Display planning guidance for building a Nextflow command.
+
+```bash
+helixsh plan
+```
+
+#### `posix-wrap`
+
+Render an explicit POSIX `exec sh -c` boundary wrapper.
+
+```bash
+helixsh posix-wrap nextflow run nf-core/rnaseq -profile docker --input s.csv
+# Add --execute to actually run it
+helixsh posix-wrap --execute nextflow run nf-core/rnaseq -profile docker --input s.csv
+```
+
+#### `preflight`
+
+Run all pre-flight checks in one shot before execution.
+
+```bash
+helixsh preflight \
+    --schema nextflow_schema.json \
+    --params params.json \
+    --workflow main.nf \
+    --cache-root .helixsh_cache \
+    --samplesheet samplesheet.csv \
+    --config nextflow.config \
+    --image ghcr.io/nf-core/rnaseq@sha256:abc123
 ```
 
 ---
 
-### Pipeline Discovery
+### Intent Parsing
+
+#### `intent`
+
+Map a natural-language request to a concrete Nextflow plan.
 
 ```bash
-# List curated nf-core pipelines
+helixsh intent "run nf-core rnaseq on tumor-normal samples using docker"
+helixsh intent "analyse chip-seq data with singularity resume if possible"
+helixsh intent "run scrna-seq offline with apptainer"
+helixsh intent "process amplicon 16S data with conda"
+```
+
+Supported pipelines detected by intent: `rnaseq`, `sarek`, `chipseq`, `atacseq`, `methylseq`, `scrnaseq`, `ampliseq`.
+
+#### `profile-suggest`
+
+Suggest a pipeline and Nextflow profile arguments based on assay and reference.
+
+```bash
+helixsh profile-suggest --assay rnaseq --reference GRCh38
+helixsh profile-suggest --assay wgs --reference GRCh37 --offline
+helixsh profile-suggest --assay chip-seq
+```
+
+---
+
+### nf-core Pipelines
+
+#### `nf-list`
+
+List all curated nf-core pipelines with descriptions.
+
+```bash
 helixsh nf-list
+```
 
-# List all known pipelines with latest versions
+#### `nf-launch`
+
+Launch a pipeline using `nextflow launch` or Seqera Platform.
+
+```bash
+helixsh nf-launch nf-core/rnaseq \
+    --revision 3.14.0 \
+    --profile docker \
+    --outdir results/ \
+    --params '{"genome":"GRCh38","aligner":"star_salmon"}' \
+    --execute
+```
+
+Options:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--revision` | `main` | Pipeline revision / tag |
+| `--profile` | `docker` | Nextflow profile |
+| `--outdir` | `results/` | Output directory |
+| `--params` | — | JSON string of pipeline params |
+| `--work-dir` | — | Nextflow work directory |
+| `--execute` | — | Actually launch (default: dry-run) |
+
+#### `nf-auth`
+
+Show Seqera Platform (`TOWER_ACCESS_TOKEN`) authentication status.
+
+```bash
+helixsh nf-auth
+```
+
+#### `pipeline-list`
+
+List known nf-core pipelines with their latest version from the bundled registry.
+
+```bash
 helixsh pipeline-list
+# Force refresh from nf-core API
+helixsh pipeline-list --refresh
+```
 
-# Check if your pinned version is current
-helixsh pipeline-update --pipeline nf-core/rnaseq --pinned 3.14.0
+#### `pipeline-update`
 
-# Refresh pipeline registry cache then check
-helixsh pipeline-update --pipeline sarek --pinned 3.4.0 --cache registry.json --refresh
+Check if a pinned pipeline version matches the latest release.
 
-# Suggest profile and pipeline args for an assay
-helixsh profile-suggest --assay wgs --reference GRCh38
-helixsh profile-suggest --assay rnaseq --offline
+```bash
+helixsh pipeline-update nf-core/rnaseq --pinned 3.12.0
+helixsh pipeline-update nf-core/sarek --pinned 3.4.0 --refresh
 ```
 
 ---
 
 ### Samplesheet Tools
 
-```bash
-# Generate samplesheet from a directory of FASTQ files
-helixsh samplesheet-generate --fastq-dir /data/fastq --pipeline rnaseq --out samplesheet.csv
+#### `samplesheet-validate`
 
-# Validate an existing samplesheet
+Validate an nf-core samplesheet CSV for required columns and data integrity.
+
+```bash
 helixsh samplesheet-validate --file samplesheet.csv --pipeline rnaseq
+helixsh samplesheet-validate --file samplesheet.csv --pipeline sarek
 ```
 
-Supported pipelines for validation: `rnaseq`, `sarek`, `chipseq`, `atacseq`
+Checks: required columns present, `fastq_1` files exist, paired-end consistency, strandedness values.
+
+#### `samplesheet-generate`
+
+Auto-generate an nf-core samplesheet by scanning a FASTQ directory for R1/R2 pairs.
+
+```bash
+helixsh samplesheet-generate \
+    --fastq-dir /data/fastq/ \
+    --pipeline rnaseq \
+    --strandedness reverse \
+    --out samplesheet.csv
+```
+
+Options:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--fastq-dir` | — | Directory containing FASTQ files |
+| `--pipeline` | `rnaseq` | Target pipeline (affects column names) |
+| `--strandedness` | `auto` | `forward`, `reverse`, `unstranded`, `auto` |
+| `--out` | `samplesheet.csv` | Output file path |
 
 ---
 
 ### Reference Genomes
 
-```bash
-# List available reference genomes
-helixsh ref-list
+#### `ref-list`
 
-# Dry-run: show what would be downloaded
-helixsh ref-download --genome GRCh38 --cache-root .helixsh_cache/refs
+List all reference genomes in the built-in catalogue.
+
+```bash
+helixsh ref-list
+```
+
+Available genomes: `GRCh38`, `GRCh37`, `GRCm39`, `GRCm38`, `TAIR10`, `R64-1-1`, `WBcel235`.
+
+#### `ref-download`
+
+Download and cache a reference genome (FASTA + GTF) from Ensembl.
+
+```bash
+# Dry-run (show what would be downloaded)
+helixsh ref-download --genome GRCh38 --cache-root /ref/cache
 
 # Actually download
-helixsh ref-download --genome GRCh38 --cache-root .helixsh_cache/refs --execute
+helixsh ref-download --genome GRCh38 --cache-root /ref/cache --execute
+helixsh ref-download --genome GRCm39 --cache-root ~/helixsh_refs --execute
 ```
 
----
-
-### Schema & Preflight Validation
-
-```bash
-# Validate params against nf-core JSON schema
-helixsh validate-schema --schema schema.json --params params.json
-
-# Parse Nextflow processes, detect container policy violations
-helixsh parse-workflow --file main.nf
-
-# Check samplesheet and nextflow.config defaults
-helixsh context-check --samplesheet samplesheet.csv --config nextflow.config
-
-# Check offline cache readiness
-helixsh offline-check --cache-root .helixsh_cache
-
-# Run all preflight checks in one command
-helixsh preflight \
-  --schema schema.json \
-  --params params.json \
-  --workflow main.nf \
-  --samplesheet samplesheet.csv \
-  --config nextflow.config \
-  --cache-root .helixsh_cache \
-  --image ghcr.io/nf-core/rnaseq@sha256:abc123...
-```
-
----
-
-### Container Policy
-
-```bash
-# Check if an image reference meets digest policy
-helixsh image-check --image ghcr.io/nf-core/rnaseq@sha256:abc123...
-helixsh image-check --image biocontainers/samtools:1.17
-```
-
-Policy rules:
-- Image digests (`@sha256:...`) are preferred
-- Host binaries are blocked
-- Pinned tags are flagged as warnings
-
----
-
-### Resource Planning & Cloud Cost
-
-```bash
-# Estimate CPU/memory for a tool and sample count
-helixsh resource-estimate --tool star --assay rnaseq --samples 4
-helixsh resource-estimate --tool salmon --assay rnaseq --samples 2 --calibration calibration.json
-
-# Fit calibration multipliers from empirical observations
-helixsh fit-calibration --observations observations.json --out calibration.json
-
-# Summarise a Nextflow trace.txt for bottlenecks and failed tasks
-helixsh trace-summary --file work/trace.txt
-
-# Estimate cloud cost
-helixsh cost-estimate --cpu 32 --memory-gb 128 --hours 4 --provider aws
-helixsh cost-estimate --cpu 32 --memory-gb 128 --hours 4 --compare-all
-```
+Files are stored at `<cache-root>/<genome>/` with SHA-256 checksums written alongside each file.
 
 ---
 
 ### Bioconda Integration
 
+#### `conda-search`
+
+Search the Bioconda channel for a tool.
+
 ```bash
-# Search Bioconda for a package
-helixsh conda-search --package star
-
-# Dry-run install (shows the conda command)
-helixsh conda-install --package star --package samtools
-
-# Actually install into an existing env
-helixsh conda-install --package star --env myenv --execute
-
-# Create a new Bioconda environment (dry-run)
-helixsh conda-env --name ngs --tool star --tool samtools --tool gatk
-
-# Create it for real
-helixsh conda-env --name ngs --tool star --tool samtools --execute
+helixsh conda-search samtools
+helixsh conda-search star
+helixsh conda-search gatk4
 ```
+
+#### `conda-install`
+
+Install one or more Bioconda packages (dry-run by default).
+
+```bash
+# Preview install command
+helixsh conda-install samtools bwa-mem2
+
+# Install into a specific environment
+helixsh conda-install samtools --env-name myenv
+
+# Actually execute the install
+helixsh conda-install samtools bwa-mem2 --execute
+```
+
+#### `conda-env`
+
+Create a complete conda environment with Bioconda tools (dry-run by default).
+
+```bash
+# Preview environment creation
+helixsh conda-env myenv --tools samtools,bwa-mem2,gatk4
+
+# Specify Python version
+helixsh conda-env myenv --tools star,salmon --python-version 3.11
+
+# Actually create it
+helixsh conda-env myenv --tools samtools,bwa-mem2 --execute
+```
+
+All conda commands use the recommended channel stack:
+`conda-forge → bioconda` with `--strict-channel-priority` and `defaults` channel removed.
 
 ---
 
-### HPC / Environment Modules
+### Trace & Cost Analysis
 
-For HPC clusters that use Lmod/Environment Modules instead of Docker:
+#### `trace-summary`
+
+Parse a Nextflow `trace.txt` file and show per-process resource usage.
 
 ```bash
-# List tools with known HPC module names
-helixsh envmodules-list
-
-# Generate a Nextflow modules.config for HPC
-helixsh envmodules-wrap --tool star --tool samtools --out modules.config
-
-# With a process selector prefix
-helixsh envmodules-wrap --tool star --tool samtools \
-  --process-prefix "NFCORE_RNASEQ:" --out modules.config
+helixsh trace-summary --file results/pipeline_info/trace.txt
 ```
+
+Output includes: total tasks, failed count, per-process CPU time, memory, wall time, and I/O.
+
+#### `cost-estimate`
+
+Estimate cloud cost for a pipeline run across AWS, GCP, and Azure.
+
+```bash
+# Basic estimate
+helixsh cost-estimate --cpu 32 --memory-gb 128 --hours 6
+
+# Provider-specific with instance family
+helixsh cost-estimate --cpu 64 --memory-gb 256 --hours 12 \
+    --provider aws --instance-family compute
+
+# Compare all providers
+helixsh cost-estimate --cpu 32 --memory-gb 128 --hours 6 --compare
+
+# Override pricing
+helixsh cost-estimate --cpu 32 --memory-gb 128 --hours 6 \
+    --price-per-cpu-hour 0.04 --price-per-gb-hour 0.005
+```
+
+Options:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--cpu` | — | Total vCPU count |
+| `--memory-gb` | — | Total memory in GB |
+| `--hours` | — | Estimated wall-clock hours |
+| `--provider` | `aws` | `aws`, `gcp`, `azure` |
+| `--instance-family` | `general` | `general`, `compute`, `memory`, `spot` |
+| `--compare` | — | Show all three providers |
 
 ---
 
-### Seqera Platform / Tower
+### Seqera Platform (Tower)
+
+Set `TOWER_ACCESS_TOKEN` (and optionally `TOWER_WORKSPACE_ID`) before using these commands.
 
 ```bash
-# Check authentication status
-helixsh nf-auth
+export TOWER_ACCESS_TOKEN=your_token_here
+export TOWER_WORKSPACE_ID=12345   # optional
+```
+
+#### `tower-auth`
+
+Verify your Seqera Platform token and connectivity.
+
+```bash
 helixsh tower-auth
+```
 
-# Launch pipeline via nextflow launch / Seqera Platform (dry-run)
-helixsh nf-launch --pipeline nf-core/rnaseq --profile docker \
-  --param genome=GRCh38 --param input=samplesheet.csv
+#### `tower-submit`
 
-# Execute it
-helixsh nf-launch --pipeline nf-core/rnaseq --profile docker \
-  --param genome=GRCh38 --param input=samplesheet.csv --execute
+Submit a pipeline run to Seqera Platform REST API.
 
-# Submit to Seqera Platform REST API
-helixsh tower-submit --pipeline nf-core/rnaseq --revision 3.14.0 \
-  --profile docker --work-dir s3://my-bucket/work \
-  --workspace-id 12345 --param genome=GRCh38
+```bash
+# Dry-run (default)
+helixsh tower-submit \
+    --pipeline nf-core/rnaseq \
+    --revision 3.14.0 \
+    --profile docker \
+    --work-dir s3://my-bucket/work
 
-# Check run status
-helixsh tower-status --workflow-id abc123 --workspace-id 12345
+# Actually submit
+helixsh tower-submit \
+    --pipeline nf-core/rnaseq \
+    --profile docker \
+    --work-dir s3://my-bucket/work \
+    --params '{"genome":"GRCh38","input":"s3://my-bucket/samplesheet.csv"}' \
+    --execute
+```
 
-# List compute environments
+Options:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--pipeline` | — | Pipeline name (e.g. `nf-core/rnaseq`) |
+| `--revision` | `main` | Git revision / tag |
+| `--profile` | `docker` | Nextflow profile |
+| `--work-dir` | `s3://your-bucket/work` | Work directory |
+| `--params` | — | JSON string of pipeline params |
+| `--compute-env-id` | — | Seqera compute environment ID |
+| `--workspace-id` | — | Override `TOWER_WORKSPACE_ID` |
+| `--execute` | — | Actually submit |
+
+#### `tower-status`
+
+Get the status of a submitted workflow run.
+
+```bash
+helixsh tower-status --workflow-id 1abc23def456
+```
+
+#### `tower-envs`
+
+List available compute environments in your workspace.
+
+```bash
 helixsh tower-envs
+helixsh tower-envs --workspace-id 12345
 ```
 
 ---
 
-### Failure Diagnosis & Cache
+### HPC Environment Modules
+
+For clusters running Lmod or Environment Modules (no container runtime).
+
+#### `envmodules-list`
+
+List all tools with known HPC module names.
 
 ```bash
-# Diagnose a failed process
-helixsh diagnose --process QUANTIFY --exit-code 137 --memory-gb 4
-# → Identifies OOM, suggests increasing memory or switching to kallisto
-
-# Summarise cache/resume efficiency
-helixsh cache-report --total 100 --cached 83 --invalidated ALIGN_READS
+helixsh envmodules-list
 ```
 
-Common exit code interpretations:
+Includes 25+ tools: STAR, HISAT2, BWA, samtools, GATK, Salmon, fastp, MultiQC, and more.
 
-| Exit code | Likely cause | Action |
-|-----------|--------------|--------|
-| 137 | Out of memory (OOM kill) | Increase memory or reduce parallelism |
-| 1 | General process failure | Check process log |
-| 139 | Segfault | Check tool version / input data |
+#### `envmodules-wrap`
 
----
-
-### Audit, Provenance & Compliance
-
-Every `run` command writes to `.helixsh_audit.jsonl` automatically.
+Generate a Nextflow `modules.config` that loads HPC environment modules per process.
 
 ```bash
-# Verify audit log integrity (hash check)
-helixsh audit-verify
+# Print to stdout
+helixsh envmodules-wrap star samtools gatk4 salmon multiqc
 
-# Export audit log with SHA-256 digest
-helixsh audit-export --out audit_export.json
+# Write to file
+helixsh envmodules-wrap star samtools gatk4 \
+    --out modules.config \
+    --process-prefix nf-core
 
-# HMAC-sign the audit log
-helixsh audit-sign --key-file audit.key --out audit.sig
-
-# Verify the signature
-helixsh audit-verify-signature --key-file audit.key --signature-file audit.sig
-
-# Generate validation report for regulated environments
-helixsh report \
-  --schema-ok --container-policy-ok \
-  --cache-percent 95 --diagnostics ok \
-  --out validation_report.json
-
-# RBAC: check if a role can take an action
-helixsh rbac-check --role auditor --action run
-
-# Clinical compliance check (for AI agent pipelines)
-helixsh compliance-check \
-  --image biocontainers/gatk:4.4 \
-  --agreement-score 0.92 \
-  --confidence 0.87
-```
-
-**RBAC roles:**
-
-| Role | Permissions |
-|------|-------------|
-| `analyst` | run, plan, doctor, explain, validate |
-| `auditor` | doctor, explain, audit commands (read-only) |
-| `viewer` | explain, doctor |
-
----
-
-### Provenance & Execution Lifecycle
-
-```bash
-# Generate a reproducible execution hash record
-helixsh provenance \
-  --command "nextflow run nf-core/rnaseq" \
-  --params '{"genome":"GRCh38","input":"samplesheet.csv"}'
-
-# POSIX wrapper (explicit execution boundary)
-helixsh posix-wrap nextflow run nf-core/rnaseq -profile docker --input samplesheet.csv
-helixsh posix-wrap nextflow run nf-core/rnaseq --execute   # actually runs it
-
-# Execution lifecycle (SQLite provenance DB)
-helixsh execution-start \
-  --command "nextflow run nf-core/rnaseq" \
-  --workflow main.nf \
-  --input samplesheet.csv \
-  --image ghcr.io/nf-core/rnaseq@sha256:... \
-  --db provenance.db
-
-helixsh execution-finish \
-  --execution-id <id> --status success --db provenance.db
-
-helixsh audit-show --execution-id <id> --db provenance.db
+# Include in a Nextflow run
+nextflow run nf-core/rnaseq -profile hpc -c modules.config
 ```
 
 ---
 
-### MCP Gateway & AI Planning
+### Snakemake Bridge
 
-helixsh integrates with Claude Code via a controlled MCP gateway. Claude proposes; helixsh approves and executes.
+#### `snakemake-import`
 
-```bash
-# Check if a capability is allowed through the MCP gateway
-helixsh mcp-check execute_commands   # → denied
-helixsh mcp-check read_logs          # → allowed
-
-# Create a proposal for review
-helixsh mcp-propose \
-  --kind file_patch \
-  --summary "update nextflow.config memory settings" \
-  --payload '{"file":"nextflow.config","diff":"..."}'
-
-# List pending proposals
-helixsh mcp-proposals
-
-# Approve a proposal
-helixsh mcp-approve --id 1
-
-# Execute an approved proposal
-helixsh mcp-execute --id 1
-
-# Generate a Claude-style plan and store it as a proposal
-helixsh claude-plan --prompt "fix schema mismatch in rnaseq params"
-```
-
-**MCP permissions model:**
-
-| Capability | Allowed |
-|------------|---------|
-| Read logs | Yes |
-| Inspect DAG | Yes |
-| Modify files | Proposal only |
-| Execute commands | No |
-
----
-
-### Agent Tasks & Arbitration
-
-For multi-agent clinical genomics workflows:
+Import resource declarations (threads, mem_mb, runtime) from a Snakefile into helixsh calibration format.
 
 ```bash
-# Run an agent task via HAPS v1
-helixsh agent-run \
-  --agent variant-classifier \
-  --task classify_variant \
-  --model claude-sonnet-4-6 \
-  --payload '{"gene":"BRCA1","hgvs":"c.5266dupC"}'
-
-# Arbitrate between multiple agent responses
-helixsh arbitrate --responses responses.json --strategy majority
-helixsh arbitrate --responses responses.json --strategy weighted_confidence
-```
-
----
-
-### Snakemake Import
-
-Migrate resource declarations from an existing Snakefile:
-
-```bash
-# Import resource declarations
+# Show extracted resources as JSON
 helixsh snakemake-import --file Snakefile
 
-# Export as helixsh calibration observations
-helixsh snakemake-import --file Snakefile --export-calibration observations.json
+# Export as helixsh calibration file
+helixsh snakemake-import --file Snakefile \
+    --export-calibration calibration.json
 ```
 
 ---
 
-### Roadmap Status
+### Schema & Validation
+
+#### `validate-schema`
+
+Validate a parameters JSON file against an nf-core-style schema.
 
 ```bash
-helixsh roadmap-status   # JSON output of phase completion
+helixsh validate-schema \
+    --schema nextflow_schema.json \
+    --params params.json
 ```
+
+#### `context-check`
+
+Summarize a samplesheet and `nextflow.config` defaults.
+
+```bash
+helixsh context-check \
+    --samplesheet samplesheet.csv \
+    --config nextflow.config
+```
+
+#### `offline-check`
+
+Check offline cache readiness (schemas, containers, assets).
+
+```bash
+helixsh offline-check --cache-root .helixsh_cache
+```
+
+#### `parse-workflow`
+
+Parse Nextflow process blocks from a `.nf` file and check container policy.
+
+```bash
+helixsh parse-workflow --file main.nf
+```
+
+---
+
+### Resource Estimation
+
+#### `resource-estimate`
+
+Estimate CPU and memory requirements for a tool, assay, and sample count.
+
+```bash
+helixsh resource-estimate --tool star --assay rnaseq --samples 8
+helixsh resource-estimate --tool gatk4 --assay wgs --samples 4
+
+# With empirical calibration multipliers
+helixsh resource-estimate --tool salmon --assay rnaseq \
+    --samples 12 --calibration calibration.json
+```
+
+#### `fit-calibration`
+
+Fit calibration multipliers from an observations JSON file.
+
+```bash
+helixsh fit-calibration \
+    --observations observations.json \
+    --out calibration.json
+```
+
+The observations file is a JSON array of `{"tool": "star", "cpu_actual": 12, "mem_actual_gb": 38, ...}` records collected from real runs.
+
+---
+
+### AI Planning (MCP)
+
+helixsh uses a proposal-review-execute pattern so AI suggestions never run without human approval.
+
+#### `claude-plan`
+
+Generate a Claude AI plan proposal and store it for review.
+
+```bash
+helixsh claude-plan --prompt "fix schema validation for tumor-normal sarek run"
+```
+
+#### `mcp-check`
+
+Check whether an MCP gateway capability is permitted.
+
+```bash
+helixsh mcp-check execute_commands
+helixsh mcp-check read_files
+```
+
+#### `mcp-propose`
+
+Store a proposal for review.
+
+```bash
+helixsh mcp-propose \
+    --kind file_patch \
+    --summary "update nextflow.config memory settings" \
+    --payload '{"file":"nextflow.config","patch":"..."}'
+```
+
+#### `mcp-proposals`
+
+List all pending proposals.
+
+```bash
+helixsh mcp-proposals
+```
+
+#### `mcp-approve`
+
+Approve a proposal by ID.
+
+```bash
+helixsh mcp-approve --id 1
+```
+
+#### `mcp-execute`
+
+Execute an approved proposal.
+
+```bash
+helixsh mcp-execute --id 1
+```
+
+---
+
+### Diagnostics
+
+#### `diagnose`
+
+Diagnose a failed Nextflow process by exit code.
+
+```bash
+helixsh diagnose --process QUANTIFY --exit-code 137
+helixsh diagnose --process ALIGN_READS --exit-code 137 --memory-gb 4
+helixsh diagnose --process TRIM_READS --exit-code 1
+```
+
+Common exit codes interpreted: `137` (OOM), `139` (segfault), `143` (SIGTERM), `127` (command not found), `1` (general failure).
+
+#### `cache-report`
+
+Summarize pipeline cache and resume efficiency.
+
+```bash
+helixsh cache-report --total 120 --cached 98 --invalidated ALIGN_READS,INDEX_GENOME
+```
+
+#### `explain`
+
+Explain the latest command plan.
+
+```bash
+helixsh explain last
+```
+
+#### `roadmap-status`
+
+Show current helixsh development roadmap completion status.
+
+```bash
+helixsh roadmap-status
+```
+
+---
+
+### Audit & Provenance
+
+#### `execution-start`
+
+Record the start of a pipeline execution in the SQLite provenance database.
+
+```bash
+helixsh execution-start \
+    --command "nextflow run nf-core/rnaseq" \
+    --params '{"genome":"GRCh38","input":"samplesheet.csv"}' \
+    --pipeline nf-core/rnaseq \
+    --profile docker
+```
+
+Returns an execution ID used for subsequent `execution-finish` and `audit-show` calls.
+
+#### `execution-finish`
+
+Record the completion of a pipeline execution.
+
+```bash
+helixsh execution-finish \
+    --id exec_20250101_abc123 \
+    --status success \
+    --exit-code 0
+```
+
+#### `audit-show`
+
+Show the full execution bundle from the provenance DB.
+
+```bash
+helixsh audit-show --id exec_20250101_abc123
+```
+
+#### `audit-export`
+
+Export the JSONL audit log with a reproducible SHA-256 digest.
+
+```bash
+helixsh audit-export --out audit_export.json
+```
+
+#### `audit-verify`
+
+Verify the integrity and shape of the audit log.
+
+```bash
+helixsh audit-verify
+```
+
+#### `audit-sign`
+
+Sign the audit log with an HMAC key.
+
+```bash
+helixsh audit-sign --key-file audit.key --out audit.sig
+```
+
+#### `audit-verify-signature`
+
+Verify an HMAC-signed audit log.
+
+```bash
+helixsh audit-verify-signature \
+    --key-file audit.key \
+    --signature-file audit.sig
+```
+
+#### `provenance`
+
+Generate a reproducible execution hash record.
+
+```bash
+helixsh provenance \
+    --command "nextflow run nf-core/rnaseq" \
+    --params '{"genome":"GRCh38","aligner":"star_salmon"}'
+```
+
+---
+
+### Security & Compliance
+
+#### `image-check`
+
+Check whether a container image has a pinned digest (required for reproducibility).
+
+```bash
+helixsh image-check --image ghcr.io/nf-core/rnaseq@sha256:abc123...
+helixsh image-check --image biocontainers/samtools:1.17
+```
+
+#### `rbac-check`
+
+Check whether a role is permitted to perform an action.
+
+```bash
+helixsh rbac-check --role auditor --action run
+helixsh rbac-check --role analyst --action conda-install
+helixsh rbac-check --role admin --action conda-install
+```
+
+#### `compliance-check`
+
+Evaluate clinical compliance policy for container images and model confidence.
+
+```bash
+helixsh compliance-check \
+    --images ghcr.io/nf-core/rnaseq@sha256:abc123 \
+    --agreement-score 0.9 \
+    --confidences 0.85 0.92
+```
+
+#### `agent-run`
+
+Run an agent task via the HAPS v1 (Helix Agent Protocol Spec).
+
+```bash
+helixsh agent-run \
+    --agent variant_classification \
+    --task "classify variants from sarek VCF" \
+    --payload '{"vcf":"variants.vcf"}'
+```
+
+#### `arbitrate`
+
+Arbitrate between multiple agent responses using a strategy.
+
+```bash
+helixsh arbitrate \
+    --responses responses.json \
+    --strategy majority_vote
+```
+
+---
+
+## RBAC: Role-Based Access
+
+Every command is gated by one of three built-in roles. Pass `--role <role>` globally or set the default via your organisation's deployment.
+
+| Role | Description | Additional permissions vs. previous role |
+|---|---|---|
+| `auditor` | Read-only inspection | `doctor`, `explain`, `plan`, `validate-schema`, `parse-workflow`, `diagnose`, `cache-report`, `roadmap-status`, `rbac-check`, `report`, `context-check`, `offline-check`, `audit-export`, `audit-verify`, `audit-sign`, `audit-verify-signature`, `resource-estimate`, `fit-calibration`, `image-check`, `agent-run`, `arbitrate`, `compliance-check`, `mcp-check`, `mcp-proposals`, `nf-auth`, `ref-list`, `pipeline-list`, `envmodules-list`, `tower-auth`, `tower-status`, `tower-envs`, `trace-summary`, `cost-estimate` |
+| `analyst` | + pipeline operations | All auditor commands + `run`, `intent`, `profile-suggest`, `provenance`, `posix-wrap`, `preflight`, `execution-start`, `execution-finish`, `audit-show`, `mcp-propose`, `mcp-approve`, `mcp-execute`, `claude-plan`, `nf-launch`, `samplesheet-validate`, `samplesheet-generate`, `ref-download`, `pipeline-update`, `envmodules-wrap`, `tower-submit`, `snakemake-import` |
+| `admin` | + environment management | All analyst commands + `conda-install`, `conda-env`, `conda-search` |
+
+Example:
+
+```bash
+# Auditor: read-only checks
+helixsh --role auditor doctor
+helixsh --role auditor trace-summary --file trace.txt
+
+# Analyst: run pipelines
+helixsh --role analyst run nf-core/rnaseq --runtime docker --input s.csv
+
+# Admin: install tools
+helixsh --role admin conda-install star salmon
+```
+
+---
+
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `TOWER_ACCESS_TOKEN` | For Tower commands | Seqera Platform personal access token |
+| `TOWER_API_ENDPOINT` | No | Default: `https://api.cloud.seqera.io` |
+| `TOWER_WORKSPACE_ID` | No | Seqera workspace numeric ID |
+| `HELIXSH_AUDIT_FILE` | No | Path to audit JSONL (default: `.helixsh_audit.jsonl`) |
+| `HELIXSH_PROVENANCE_DB` | No | Path to SQLite provenance DB (default: `.helixsh_provenance.db`) |
+
+---
+
+## Configuration
+
+### Strict mode
+
+Strict mode prevents any side-effecting command from running without `--execute` and `--yes`:
+
+```bash
+helixsh --strict run nf-core/rnaseq --runtime docker --input s.csv
+# → blocked: requires --execute --yes
+
+helixsh --strict run nf-core/rnaseq --runtime docker --input s.csv --execute --yes
+# → runs
+```
+
+Use strict mode in clinical genomics, regulated HPC, or production environments.
+
+### Audit log
+
+All commands append a structured JSONL entry to `.helixsh_audit.jsonl` including:
+
+- Timestamp, role, command, parameters
+- Reproducible execution hash (SHA-256)
+- Container images used
+
+### Provenance database
+
+All pipeline executions are recorded in an SQLite database (`.helixsh_provenance.db`) with full parameter sets, execution IDs, status, and timing.
 
 ---
 
 ## Architecture
 
 ```
-┌────────────────────────────┐
-│        helixsh CLI         │
-│  (POSIX-compatible shell)  │
-└──────────────┬─────────────┘
-               ↓
-┌────────────────────────────┐
-│ Intent & Context Layer     │
-│  - Bio terminology         │
-│  - nf-core schemas         │
-│  - Sample metadata         │
-└──────────────┬─────────────┘
-               ↓
-┌────────────────────────────┐
-│ Workflow Intelligence      │
-│  - Nextflow AST            │
-│  - Process graph (DAG)     │
-│  - Resume/cache semantics  │
-└──────────────┬─────────────┘
-               ↓
-┌────────────────────────────┐
-│ Container Orchestrator     │
-│  - Docker / Podman         │
-│  - MCP Gateway             │
-│  - Claude Code CLI         │
-└──────────────┬─────────────┘
-               ↓
-┌────────────────────────────┐
-│ Safe POSIX Executor        │
-│  - sh / bash / dash        │
-│  - Audited commands        │
-└────────────────────────────┘
+┌─────────────────────────────────────┐
+│           helixsh CLI               │
+│  (argparse, zero external deps)     │
+└──────────────┬──────────────────────┘
+               │
+    ┌──────────┴──────────┐
+    ▼                     ▼
+┌─────────────┐   ┌───────────────┐
+│ Intent &    │   │ Validation &  │
+│ Context     │   │ Schema Layer  │
+│ intent.py   │   │ schema.py     │
+│ profiles.py │   │ context.py    │
+│ resources.py│   │ workflow.py   │
+└──────┬──────┘   └───────┬───────┘
+       │                  │
+       └────────┬─────────┘
+                ▼
+    ┌───────────────────────┐
+    │   Execution Layer     │
+    │  nextflow.py          │
+    │  nf_launch.py         │
+    │  bioconda.py          │
+    │  tower.py             │
+    └───────────┬───────────┘
+                │
+    ┌───────────┴───────────┐
+    │   Audit & Provenance  │
+    │  provenance_db.py     │
+    │  signing.py           │
+    │  compliance.py        │
+    └───────────────────────┘
 ```
 
----
+### Key design decisions
 
-## Supported Assays & Tools
-
-**Assay types:** WGS, WES, RNA-seq, cfDNA, ChIP-seq, ATAC-seq, scRNA-seq, metagenomics, amplicon, methylation, Hi-C, long-read (Nanopore), ancient DNA
-
-**Reference genomes:** GRCh37, GRCh38, hg19, GRCm38, GRCm39, T2T-CHM13
-
-**Container runtimes:** Docker (first-class), Podman (compatible), Singularity / Apptainer (HPC mode)
-
-**nf-core pipelines (curated):**
-
-| Pipeline | Description |
-|----------|-------------|
-| `nf-core/rnaseq` | RNA-seq quantification (STAR/Salmon/HISAT2) |
-| `nf-core/sarek` | Germline and somatic variant calling (WGS/WES) |
-| `nf-core/chipseq` | ChIP-seq peak calling |
-| `nf-core/atacseq` | ATAC-seq peak calling |
-| `nf-core/methylseq` | Bisulfite / DNA methylation |
-| `nf-core/scrnaseq` | Single-cell RNA-seq |
-| `nf-core/ampliseq` | Amplicon / 16S rRNA |
-| `nf-core/mag` | Metagenome assembly |
-| `nf-core/viralrecon` | Viral genome reconstruction |
-| `nf-core/nanoseq` | Oxford Nanopore long-read |
-| `nf-core/fetchngs` | Fetch public data (SRA/ENA) |
-| `nf-core/taxprofiler` | Metagenomic taxonomic profiling |
+- **Zero external dependencies** — everything uses Python stdlib only (`urllib`, `csv`, `json`, `re`, `subprocess`, `sqlite3`, `hashlib`).
+- **Dry-run by default** — all destructive operations (downloads, conda installs, Tower submissions, Nextflow runs) require explicit `--execute`.
+- **Nextflow is the authority** — helixsh plans, validates, and diagnoses; it never replaces Nextflow.
+- **Brace-aware DSL2 parsing** — process block extraction uses a depth-tracking brace parser, not fragile regex.
 
 ---
 
-## Strict Mode (Clinical Use)
+## Local Development
 
 ```bash
-helixsh --strict run nf-core sarek \
-  --runtime singularity \
-  --input samples.csv \
-  --execute --yes
-```
-
-In strict mode:
-- No execution without explicit `--execute`
-- Execution also requires `--yes` confirmation
-- Full audit trail is enforced
-- All changes require confirmation
-
-Suitable for clinical genomics, regulated HPC, and enterprise environments.
-
----
-
-## Development
-
-```bash
+# Clone and set up
+git clone https://github.com/musicofthings/helixsh
+cd helixsh
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
+
+# Run the full test suite
 pytest
+
+# Run a specific test file
+pytest tests/test_features.py -v
+
+# Run with coverage
+pytest --tb=short -q
 ```
 
-Tests are in `tests/` and mirror the `src/helixsh/` module structure.
+The test suite covers 188+ tests across all modules with no network calls (all external I/O is mocked or bypassed by dry-run defaults).
 
 ---
 
-## What helixsh Is Not
+## Packaging
 
-| Thing | Reason |
-|-------|--------|
-| Workflow engine | Nextflow already exists |
-| Scheduler | Slurm / PBS remain in place |
-| Notebook | Reproducibility first |
-| Cloud-only | HPC and on-prem are required |
-| AI executor | AI proposes; helixsh decides |
+Build a single-file executable for distribution:
 
----
+```bash
+./scripts/package_local.sh
+ls -lh dist/helixsh.pyz
+```
 
-## One-Line Summary
+The `.pyz` is a Python zipapp — copy it anywhere, make it executable, and run it directly. No installation required on any machine with Python 3.10+.
 
-**helixsh** is an AI-native shell that thinks like a bioinformatician, respects POSIX, trusts Nextflow, and treats AI as a planner — not an executor.
+```bash
+chmod +x dist/helixsh.pyz
+./dist/helixsh.pyz doctor
+```
