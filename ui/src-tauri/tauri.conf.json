@@ -27,13 +27,35 @@
     }
   },
   "bundle": {
-    "active": false,
+    "active": true,
+    "targets": "all",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "shortDescription": "Bioinformatics-first AI shell for Nextflow and nf-core",
+    "longDescription": "helixsh is a desktop application for running and managing Nextflow bioinformatics pipelines. It provides a streaming command interface, natural-language intent mode, environment diagnostics, nf-core pipeline browser, and role-based access control.",
+    "category": "Science",
+    "copyright": "© 2025 helixsh contributors",
+    "linux": {
+      "deb": {
+        "depends": []
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "installMode": "currentUser"
+      }
+    }
   }
 }

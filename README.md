@@ -15,6 +15,7 @@ helixsh is a zero-dependency Python CLI that wraps Nextflow and nf-core pipeline
 - [Features](#features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Desktop UI](#desktop-ui)
 - [Commands Reference](#commands-reference)
   - [Core Execution](#core-execution)
   - [Intent Parsing](#intent-parsing)
@@ -38,6 +39,8 @@ helixsh is a zero-dependency Python CLI that wraps Nextflow and nf-core pipeline
 - [Architecture](#architecture)
 - [Local Development](#local-development)
 - [Packaging](#packaging)
+  - [CLI executable (.pyz)](#cli-executable-pyz)
+  - [Desktop app](#desktop-app)
 
 ---
 
@@ -92,6 +95,21 @@ Copy `dist/helixsh.pyz` anywhere on your `$PATH` and rename it `helixsh`.
 python -m helixsh doctor
 ```
 
+### Option 4 — Desktop UI (Tauri app)
+
+Download the pre-built installer for your platform from the [Releases](https://github.com/musicofthings/helixsh/releases) page:
+
+| Platform | File |
+|---|---|
+| **Linux (deb)** | `helixsh_<version>_amd64.deb` |
+| **Linux (AppImage)** | `helixsh_<version>_amd64.AppImage` |
+| **macOS** | `helixsh_<version>_x64.dmg` |
+| **Windows** | `helixsh_<version>_x64-setup.exe` |
+
+Or build from source — see [Desktop app](#desktop-app) under Packaging.
+
+The desktop app automatically detects the helixsh CLI via: bundled sidecar → `PATH` → `python3 -m helixsh`.
+
 ### Requirements
 
 | Requirement | Notes |
@@ -137,6 +155,87 @@ helixsh ref-download --genome GRCh38 --cache-root /ref --execute
 helixsh tower-submit --pipeline nf-core/rnaseq --profile docker \
     --work-dir s3://my-bucket/work --execute
 ```
+
+---
+
+## Desktop UI
+
+helixsh ships a native desktop application built with [Tauri v2](https://tauri.app) + Svelte. It provides a Warp-inspired shell interface with real-time streaming output, intent mode, and integrated environment management — all backed by the same helixsh CLI.
+
+### Interface overview
+
+```
+┌─────────────────────────────────────────────────┐
+│  ● ─ ■   helixsh                     _  □  ✕   │  ← custom titlebar
+├──────────┬──────────────────────────────────────┤
+│ tools    │                                      │
+│ pipeline │   Command output blocks appear here   │  ← main area
+│ history  │   (streaming stdout/stderr, status)   │
+│          │                                      │
+│  Environ │                                      │
+│  ─────── │                                      │
+│  ✔ java  │                                      │
+│  ✔ nf    │                                      │
+│  ✘ conda │                                      │
+│          │                                      │
+│  Role    │                                      │
+│  analyst │                                      │
+├──────────┴──────────────────────────────────────┤
+│ ❯  Enter a helixsh command…              🔓  ▶  │  ← command bar
+└─────────────────────────────────────────────────┘
+```
+
+### Command bar
+
+| Action | How |
+|---|---|
+| Run a command | Type command and press **Enter** |
+| Intent mode | Click **⚡** (or type a natural-language description) |
+| Autocomplete | Start typing — suggestions appear above the bar; **Tab** to accept |
+| Command history | **↑ / ↓** arrow keys |
+| Strict mode | Click **🔒** to require `--execute` on all side-effecting commands |
+
+**Command mode** — type helixsh commands directly:
+
+```
+run nf-core/rnaseq --input samplesheet.csv --runtime docker
+```
+
+**Intent mode** (click ⚡ to switch) — describe what you want in plain English:
+
+```
+run RNA-seq on tumor-normal samples using docker, reference GRCh38
+```
+
+helixsh translates the description into a Nextflow plan before executing.
+
+### Sidebar tabs
+
+**Tools** — Environment doctor shows which required tools (Nextflow, Java, Docker, Conda, etc.) are installed, with version details. Click **↻ Refresh** to re-check after installing something.
+
+**Pipelines** — Browsable list of all nf-core pipelines in the bundled registry.
+
+**History** — Previous commands from the current session.
+
+### Role selector
+
+Select your access role in the **Tools** tab to enforce RBAC policy on every command:
+
+| Role | Access |
+|---|---|
+| `auditor` | Read-only (no execution commands) |
+| `analyst` | Standard pipeline execution (default) |
+| `admin` | Full access including provenance and security commands |
+
+The role is injected as `--role <role>` on every invocation.
+
+### Output blocks
+
+Each command produces a collapsible output block showing:
+- Command name and arguments
+- Streaming stdout/stderr lines in real time
+- Exit status badge (`success` / `error`) and exit code
+- Timestamp
 
 ---
 
@@ -1038,16 +1137,50 @@ The test suite covers 188+ tests across all modules with no network calls (all e
 
 ## Packaging
 
-Build a single-file executable for distribution:
+### CLI executable (.pyz)
+
+Build a single-file Python zipapp for distribution:
 
 ```bash
 ./scripts/package_local.sh
 ls -lh dist/helixsh.pyz
 ```
 
-The `.pyz` is a Python zipapp — copy it anywhere, make it executable, and run it directly. No installation required on any machine with Python 3.10+.
+The `.pyz` runs on any machine with Python 3.10+ — no installation required.
 
 ```bash
 chmod +x dist/helixsh.pyz
 ./dist/helixsh.pyz doctor
+```
+
+### Desktop app
+
+Build a native installer for the current platform:
+
+```bash
+./scripts/package_ui.sh
+```
+
+This runs `npm ci` then `tauri build` and produces platform-specific installable packages:
+
+| Platform | Output | Install |
+|---|---|---|
+| **Linux** | `bundle/deb/*.deb` | `sudo dpkg -i *.deb` |
+| **Linux** | `bundle/appimage/*.AppImage` | `chmod +x *.AppImage && ./helixsh.AppImage` |
+| **macOS** | `bundle/dmg/*.dmg` | Open dmg, drag to `/Applications` |
+| **Windows** | `bundle/nsis/*-setup.exe` | Run the NSIS installer |
+
+All output lands in `ui/src-tauri/target/release/bundle/`.
+
+**Prerequisites for building:**
+
+- Node.js 18+, Rust (stable), `cargo`
+- Linux: `sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libgtk-3-dev libgdk-pixbuf-2.0-dev`
+- macOS: Xcode Command Line Tools (`xcode-select --install`)
+- Windows: Visual Studio Build Tools with the "Desktop development with C++" workload
+
+To build a debug binary (faster compile, larger binary, DevTools enabled):
+
+```bash
+./scripts/package_ui.sh --debug
 ```
