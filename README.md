@@ -1036,6 +1036,25 @@ The test suite covers 188+ tests across all modules with no network calls (all e
 
 ---
 
+
+## Project Health (as of 2026-05-21)
+
+- Test suite status: **188 passed** (`python -m pytest -q`).
+- Bytecode compile check: **pass** (`python -m compileall -q src`).
+- UI dependency check via `npm outdated` was **blocked by registry policy (HTTP 403)** in this environment.
+- Rust dependency check via `cargo outdated` requires installing the external `cargo-outdated` subcommand first.
+
+### External tool/dependency freshness snapshot
+
+Based on upstream package registries and docs looked up on 2026-05-21:
+
+- Nextflow stable docs currently show **v25.10.3** (project requires `25.x`).
+- `@tauri-apps/api` latest visible npm version is **2.8.0** (project range: `^2`).
+- `@tauri-apps/cli` latest visible npm version is **2.8.4** (project range: `^2`).
+- `vite` latest visible npm version is **7.1.5** (project range: `^6`; consider validating upgrade path to v7).
+
+> Recommendation: keep `^2` Tauri ranges as-is unless you need a specific bugfix, and schedule a controlled Vite 6 → 7 UI upgrade with a quick smoke test.
+
 ## Packaging
 
 Build a single-file executable for distribution:
