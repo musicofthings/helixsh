@@ -48,3 +48,48 @@ def test_explain_last_handles_empty_audit(capsys, tmp_path):
         assert "No previous helixsh audit events found" in capsys.readouterr().out
     finally:
         cli.AUDIT_FILE = old
+
+
+def test_run_blocks_execution_when_preflight_fails(tmp_path, capsys, monkeypatch):
+    workflow = tmp_path / "main.nf"
+    workflow.write_text("process ALIGN { cpus 2 }", encoding="utf-8")
+    executed = False
+    old = cli.AUDIT_FILE
+    cli.AUDIT_FILE = tmp_path / "audit.jsonl"
+
+    def fake_run_posix_exec(_command):
+        nonlocal executed
+        executed = True
+        return 0
+
+    try:
+        monkeypatch.setattr(cli, "run_posix_exec", fake_run_posix_exec)
+        rc = cli.main(["run", "nf-core", "rnaseq", "--workflow", str(workflow), "--execute"])
+
+        assert rc == 2
+        assert executed is False
+        assert cli.AUDIT_FILE.exists()
+        assert "execution blocked: preflight validation failed" in capsys.readouterr().out
+    finally:
+        cli.AUDIT_FILE = old
+
+
+def test_run_uses_posix_boundary_after_successful_preflight(tmp_path, monkeypatch):
+    workflow = tmp_path / "main.nf"
+    workflow.write_text("process ALIGN { container 'image@sha256:abc' }", encoding="utf-8")
+    commands = []
+    old = cli.AUDIT_FILE
+    cli.AUDIT_FILE = tmp_path / "audit.jsonl"
+
+    def fake_run_posix_exec(command):
+        commands.append(command)
+        return 0
+
+    try:
+        monkeypatch.setattr(cli, "run_posix_exec", fake_run_posix_exec)
+        rc = cli.main(["run", "nf-core", "rnaseq", "--workflow", str(workflow), "--execute"])
+
+        assert rc == 0
+        assert commands == [["nextflow", "run", "nf-core/rnaseq", "-profile", "docker"]]
+    finally:
+        cli.AUDIT_FILE = old

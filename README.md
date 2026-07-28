@@ -1,12 +1,37 @@
-# helixsh — Bioinformatics-First AI Shell for Nextflow / nf-core
+# Helixsh — Desktop orchestration for Nextflow and nf-core
 
-**helixsh** is an AI-native, POSIX-respecting shell that understands bioinformatics intent, Nextflow / nf-core semantics, and containerized execution, while delegating real execution to deterministic tools.
+**Helixsh** is a sandboxed desktop app and POSIX-respecting CLI for planning,
+validating, and running nf-core pipelines with Docker, Kubernetes, Podman, or
+Apptainer. Nextflow remains the workflow authority; Helixsh provides the
+reviewed execution boundary around it.
+
+[Website](https://musicofthings.github.io/helixsh/) ·
+[Desktop quick start](#desktop-app) ·
+[Implementation status](#current-implementation-status-v02-development-preview)
+
+> **Development preview:** The desktop workflow, macOS application packaging,
+> execution-time preflight, Docker readiness, and Kubernetes `nf-k8s`
+> configuration are implemented. The app is not yet signed, notarized, or
+> clinically validated.
+
+## What works today
+
+| Capability | Status |
+| --- | --- |
+| Sandboxed Electron desktop UI | Implemented |
+| Reviewed plan and native run confirmation | Implemented |
+| Docker / Podman / Apptainer / Singularity targets | Implemented |
+| Kubernetes target with pinned `nf-k8s` configuration | Implemented |
+| Live logs and full process-group cancellation | Implemented |
+| Execution-time schema, workflow, context, cache, and image checks | Implemented |
+| Signed universal macOS distribution with bundled runtimes | Planned |
 
 ## Core Principles
 
 1. **POSIX execution boundary** — final execution is always real `sh`/`bash` commands.
 2. **Nextflow is the workflow authority** — helixsh plans, validates, explains, and diagnoses; it does not replace Nextflow.
-3. **Container-first execution** — Docker / Podman / Singularity are mandatory.
+3. **Container-first execution** — workflow processes run through a supported
+   container or cluster runtime rather than untracked host binaries.
 4. **LLM as planner, not executor** — AI proposes plans and fixes; helixsh decides and executes.
 5. **Offline-capable by design** — local reasoning, cached schemas, and optional internet access.
 
@@ -14,8 +39,8 @@
 
 ```text
 ┌────────────────────────────┐
-│        helixsh CLI         │
-│  (POSIX-compatible shell)  │
+│    Helixsh desktop + CLI   │
+│  (sandboxed UI / POSIX)    │
 └──────────────┬─────────────┘
                ↓
 ┌────────────────────────────┐
@@ -34,7 +59,8 @@
                ↓
 ┌────────────────────────────┐
 │ Container Orchestrator     │
-│  - Docker / Podman         │
+│  - Docker / Kubernetes     │
+│  - Podman / Singularity    │
 │  - MCP Gateway             │
 │  - Claude Code CLI         │
 └──────────────┬─────────────┘
@@ -165,6 +191,7 @@ Suggested fix: biocontainers/samtools
 | Runtime                 | Support     |
 | ----------------------- | ----------- |
 | Docker                  | First-class |
+| Kubernetes (`nf-k8s`)   | First-class |
 | Podman                  | Compatible  |
 | Singularity / Apptainer | HPC mode    |
 
@@ -238,35 +265,40 @@ No proprietary runtime and no hidden execution behavior.
 - Parameter provenance stored
 - Reproducible execution hash
 
-Suitable for clinical genomics, regulated HPC, and enterprise environments.
+These controls are foundations for regulated and enterprise deployments. The
+current development preview is not clinically validated.
 
-## Implementation Roadmap
+## Implementation roadmap
 
-### Phase 1 — Foundation (4–6 weeks)
+### Phase 1 — Foundation and desktop
 
 - POSIX shell wrapper
 - Nextflow command interception
 - nf-core schema ingestion
 - Container enforcement
+- Sandboxed desktop planner and runner
+- Docker and Kubernetes readiness checks
 
-### Phase 2 — AI Planning (6–8 weeks)
+### Phase 2 — AI planning
 
 - MCP Gateway
 - Claude Code CLI integration
 - Intent → parameter mapping
 
-### Phase 3 — Bioinformatics Intelligence
+### Phase 3 — Bioinformatics intelligence
 
 - RNA-seq / WGS / WES profiles
 - Tool memory and CPU models
 - Reference genome awareness
 
-### Phase 4 — Enterprise Hardening
+### Phase 4 — Enterprise and release hardening
 
 - Offline mode
 - RBAC
 - Audit exports
 - Validation reports
+- Code signing, notarization, and universal macOS packaging
+- Bundled Python and Nextflow runtimes
 
 ## What helixsh Is Not
 
@@ -277,13 +309,13 @@ Suitable for clinical genomics, regulated HPC, and enterprise environments.
 | Notebook        | Reproducibility first   |
 | Cloud-only      | HPC and on-prem required |
 
-## One-Line Summary
+## One-line summary
 
-**helixsh** is an AI-native shell that thinks like a bioinformatician, respects POSIX, trusts Nextflow, and treats AI as a planner—not an executor.
+**Helixsh** is a dedicated control room for reproducible nf-core execution.
 
-## Current Implementation Status (Phase 1 bootstrap)
+## Current implementation status (v0.2 development preview)
 
-This repository now includes an initial Python CLI implementation:
+This repository includes the desktop app and its Python execution backend:
 
 - `helixsh run nf-core rnaseq --runtime docker --input samplesheet.csv --resume`
 - `helixsh doctor`
@@ -304,6 +336,9 @@ This repository now includes an initial Python CLI implementation:
 - `helixsh --role auditor doctor`
 - `helixsh context-check --samplesheet samplesheet.csv --config nextflow.config`
 - `helixsh run nf-core rnaseq --offline`
+- `helixsh k8s-config --storage-claim nextflow-pvc --out nextflow.k8s.config`
+- `helixsh run nf-core rnaseq --runtime kubernetes --config nextflow.k8s.config`
+- `helixsh run nf-core rnaseq --workflow main.nf --schema schema.json --params params.json --execute`
 - `helixsh offline-check --cache-root .helixsh_cache`
 - `helixsh preflight --schema schema.json --params params.json --workflow main.nf --cache-root .helixsh_cache --image ghcr.io/tool@sha256:...`
 - `helixsh audit-verify`
@@ -324,6 +359,9 @@ Behavior highlights:
 
 - Deterministic Nextflow command generation
 - Runtime validation (Docker/Podman/Singularity/Apptainer)
+- Sandboxed Electron desktop planner/runner for nf-core pipelines
+- Docker-daemon and Kubernetes-cluster capability checks
+- Validated `nf-k8s` configuration generation with a shared persistent volume
 - Audit trail written to `.helixsh_audit.jsonl`
 - Dry-run by default; explicit `--execute` required for command execution
 - `--strict` blocks execution unless `--execute` is passed
@@ -344,6 +382,8 @@ Behavior highlights:
 - Context ingestion scaffold for `samplesheet.csv` and `nextflow.config` defaults
 - Offline-mode readiness checks for cached schemas/containers/assets
 - Combined `preflight` command to run schema/workflow/offline/context/image checks in one report
+- Execution-time preflight checks can block `run --execute` when requested validation fails
+- `run --execute` crosses the explicit POSIX `exec sh -c` boundary
 - Audit entries now include role + reproducible execution hash + provenance params, with `audit-verify` hash integrity checks
 - HMAC-based audit signature and verification workflow (`audit-sign` / `audit-verify-signature`)
 - MCP proposal workflow scaffold (`mcp-propose`/`mcp-proposals`/`mcp-approve`)
@@ -354,6 +394,71 @@ Behavior highlights:
 - Empirical calibration fitting command (`fit-calibration`)
 - Explicit POSIX wrapper renderer/executor (`exec sh -c ...`)
 - Machine-readable roadmap status report (`roadmap-status`)
+
+`roadmap-status` distinguishes implemented scaffolds from the remaining
+end-to-end PRD work; phases remain `in_progress` until those production
+requirements are complete.
+
+## Desktop app
+
+The desktop app provides a dedicated Helixsh window instead of running the
+workflow interface in a terminal. It supports:
+
+- nf-core pipeline and revision selection
+- Docker or Kubernetes execution targets
+- file pickers for samplesheets, parameter schemas, and output directories
+- a reviewed execution plan before the run is enabled
+- live logs and cancellation
+- local Nextflow, Docker-daemon, and Kubernetes-cluster readiness status
+- generated Kubernetes configuration using `nf-k8s` and a user-supplied
+  persistent-volume claim
+
+The renderer runs with Electron sandboxing and context isolation, without Node
+integration. It can only call a narrow, validated IPC API; arbitrary shell
+commands, navigation, popups, and renderer permission requests are blocked.
+Nextflow still owns workflow execution, and Docker or Kubernetes provides the
+process isolation.
+
+For local development, install Node.js 22.12 or newer:
+
+```bash
+npm install
+npm run desktop:test
+npm run desktop:dev
+```
+
+Build the current machine's macOS application bundle:
+
+```bash
+npm run desktop:pack:mac
+```
+
+The app is written to `dist-desktop/Helixsh-darwin-*/Helixsh.app`.
+
+The development build currently uses the system `python3`, Nextflow, and the
+selected container runtime. The `.app` bundles the Helixsh Python source but is
+not yet code-signed, notarized, or configured with an Apple App Sandbox
+entitlement. A bundled Python/Nextflow runtime and signed universal macOS
+distribution remain release-hardening tasks.
+
+### Docker
+
+Start Docker Desktop or another compatible Docker daemon, select **Docker**,
+choose an nf-core pipeline, review the plan, and run. Helixsh invokes Nextflow
+with `-profile docker`; nf-core's process definitions select their declared
+container images.
+
+### Kubernetes
+
+Helixsh requires a reachable cluster, `kubectl`, a service account, and a
+ReadWriteMany-compatible persistent-volume claim mounted at the selected work
+path. The app generates a dedicated Nextflow config that pins `nf-k8s` 1.5.5,
+selects the Kubernetes executor, and sets the namespace, service account,
+storage claim, mount path, and work directory. The generated config is
+validated again before execution.
+
+Only run trusted pipelines, pin a revision for reproducible work, and review
+the displayed Nextflow command before confirming execution.
 
 ### Local development
 

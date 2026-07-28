@@ -15,7 +15,9 @@ class CheckResult:
 
 CHECKS = (
     ("nextflow", ["nextflow", "-version"]),
-    ("docker", ["docker", "--version"]),
+    ("docker", ["docker", "info", "--format", "Docker server {{.ServerVersion}}"]),
+    ("kubectl", ["kubectl", "version", "--client"]),
+    ("kubernetes", ["kubectl", "cluster-info"]),
     ("podman", ["podman", "--version"]),
     ("singularity", ["singularity", "--version"]),
     ("apptainer", ["apptainer", "--version"]),
@@ -30,9 +32,12 @@ def run_check(name: str, command: list[str]) -> CheckResult:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            timeout=10,
         )
     except FileNotFoundError:
         return CheckResult(name=name, state="missing", details="binary not found")
+    except subprocess.TimeoutExpired:
+        return CheckResult(name=name, state="missing", details="check timed out")
 
     state = "ok" if result.returncode == 0 else "missing"
     raw = result.stdout.strip() or result.stderr.strip() or "not available"

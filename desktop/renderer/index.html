@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Helixsh</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">H</span>
+        <div>
+          <h1>Helixsh</h1>
+          <p>nf-core execution, without the terminal friction.</p>
+        </div>
+      </div>
+      <div id="capabilities" class="capabilities" aria-live="polite">
+        <span class="status-chip pending">Checking runtimes…</span>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="panel configuration">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Pipeline</span>
+            <h2>Configure a run</h2>
+          </div>
+          <span class="security-label">Sandboxed UI</span>
+        </div>
+
+        <form id="run-form">
+          <div class="field-grid">
+            <label>
+              <span>nf-core pipeline</span>
+              <input id="pipeline" name="pipeline" value="rnaseq" list="pipelines" required />
+              <datalist id="pipelines">
+                <option value="rnaseq"></option>
+                <option value="sarek"></option>
+                <option value="ampliseq"></option>
+                <option value="chipseq"></option>
+                <option value="scrnaseq"></option>
+                <option value="viralrecon"></option>
+              </datalist>
+            </label>
+            <label>
+              <span>Release or revision</span>
+              <input id="revision" name="revision" placeholder="Recommended, e.g. 3.18.0" />
+            </label>
+            <label>
+              <span>Execution target</span>
+              <select id="runtime" name="runtime">
+                <option value="docker">Local Docker</option>
+                <option value="podman">Local Podman</option>
+                <option value="apptainer">Apptainer / HPC</option>
+                <option value="singularity">Singularity / HPC</option>
+                <option value="kubernetes">Kubernetes</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="file-grid">
+            <div class="file-field">
+              <span>Samplesheet</span>
+              <div class="file-control">
+                <input id="inputPath" readonly placeholder="Optional CSV" />
+                <button type="button" data-picker="samplesheet" data-target="inputPath">Choose</button>
+              </div>
+            </div>
+            <div class="file-field">
+              <span>Output directory</span>
+              <div class="file-control">
+                <input id="outputPath" readonly required placeholder="Choose results directory" />
+                <button type="button" data-picker="directory" data-target="outputPath">Choose</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="kubernetes-panel" class="subpanel hidden">
+            <div class="subpanel-heading">
+              <div>
+                <span class="eyebrow">Kubernetes</span>
+                <h3>Generate an nf-k8s executor profile</h3>
+              </div>
+              <span id="k8s-config-state">Not generated</span>
+            </div>
+            <div class="field-grid k8s-grid">
+              <label>
+                <span>Namespace</span>
+                <input id="namespace" value="default" />
+              </label>
+              <label>
+                <span>Service account</span>
+                <input id="serviceAccount" value="nextflow" />
+              </label>
+              <label>
+                <span>Persistent volume claim</span>
+                <input id="storageClaim" placeholder="nextflow-pvc" />
+              </label>
+              <label>
+                <span>Mount path</span>
+                <input id="storageMountPath" value="/workspace" />
+              </label>
+            </div>
+            <button id="generate-k8s" type="button" class="secondary">Generate secure config</button>
+            <input id="configPath" type="hidden" />
+          </div>
+
+          <details>
+            <summary>Advanced validation</summary>
+            <div class="advanced-grid">
+              <div class="file-field">
+                <span>Workflow source</span>
+                <div class="file-control">
+                  <input id="workflowPath" readonly placeholder="main.nf" />
+                  <button type="button" data-picker="workflow" data-target="workflowPath">Choose</button>
+                </div>
+              </div>
+              <div class="file-field">
+                <span>Schema JSON</span>
+                <div class="file-control">
+                  <input id="schemaPath" readonly placeholder="nextflow_schema.json" />
+                  <button type="button" data-picker="schema" data-target="schemaPath">Choose</button>
+                </div>
+              </div>
+              <div class="file-field">
+                <span>Parameters JSON</span>
+                <div class="file-control">
+                  <input id="paramsPath" readonly placeholder="params.json" />
+                  <button type="button" data-picker="params" data-target="paramsPath">Choose</button>
+                </div>
+              </div>
+              <div class="file-field">
+                <span>Container image check</span>
+                <input id="image" placeholder="quay.io/…@sha256:…" />
+              </div>
+              <div class="file-field">
+                <span>Offline cache</span>
+                <div class="file-control">
+                  <input id="cacheRoot" readonly placeholder=".helixsh_cache" />
+                  <button type="button" data-picker="directory" data-target="cacheRoot">Choose</button>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <div class="toggle-row">
+            <label class="toggle"><input id="resume" type="checkbox" checked /><span>Resume cached work</span></label>
+            <label class="toggle"><input id="offline" type="checkbox" /><span>Offline mode</span></label>
+          </div>
+
+          <div class="actions">
+            <button id="plan" type="submit" class="secondary">Validate &amp; plan</button>
+            <button id="run" type="button" class="primary">Run pipeline</button>
+            <button id="cancel" type="button" class="danger hidden">Stop run</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel activity">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Activity</span>
+            <h2>Run console</h2>
+          </div>
+          <span id="run-state" class="run-state idle">Idle</span>
+        </div>
+        <div id="notice" class="notice">
+          Select a pipeline and validate the plan. Helixsh will show the exact Nextflow command before execution.
+        </div>
+        <pre id="console" tabindex="0" aria-live="polite"></pre>
+      </section>
+    </main>
+  </body>
+</html>

@@ -17,41 +17,57 @@ def compute_roadmap_status() -> list[PhaseStatus]:
     return [
         PhaseStatus(
             phase="Phase 1 — Foundation",
-            status="completed",
+            status="in_progress",
             completed=(
                 "POSIX shell wrapper",
                 "Nextflow command interception",
-                "nf-core schema ingestion",
+                "nf-core-style schema validation scaffold",
                 "Container enforcement scaffolding",
+                "Execution-time preflight enforcement",
+                "Sandboxed Electron desktop planner and runner",
+                "Docker daemon and Kubernetes cluster readiness checks",
+                "Validated nf-k8s shared-storage configuration generation",
             ),
-            pending=tuple(),
+            pending=(
+                "Interactive POSIX shell and intent-first command interception",
+                "Full Nextflow AST/DAG parsing including inputs, outputs, and when conditions",
+                "nf-core schema acquisition and complete JSON Schema validation",
+                "End-to-end host-binary blocking and digest-pinned container enforcement across runtimes",
+            ),
         ),
         PhaseStatus(
             phase="Phase 2 — AI Planning",
-            status="completed",
+            status="in_progress",
             completed=(
                 "Intent → parameter mapping scaffold",
                 "MCP capability policy",
                 "Proposal workflow store",
-                "Claude Code CLI integration shim",
-                "End-to-end MCP proposal execution runtime",
+                "Deterministic Claude-plan proposal shim",
             ),
-            pending=tuple(),
+            pending=(
+                "Live Claude Code CLI and MCP gateway integration",
+                "Validated proposal diff application",
+                "End-to-end intent to preflighted execution plans",
+            ),
         ),
         PhaseStatus(
             phase="Phase 3 — Bioinformatics Intelligence",
-            status="completed",
+            status="in_progress",
             completed=(
                 "RNA-seq/WGS/WES profile suggestions",
                 "Tool memory/CPU estimation scaffold",
                 "Reference genome parameter hints",
                 "Empirical tool performance model calibration",
             ),
-            pending=tuple(),
+            pending=(
+                "Workflow-aware resource mismatch and bottleneck prediction",
+                "Semantic parameter and tool explanations",
+                "Reference asset awareness and cache invalidation reasoning",
+            ),
         ),
         PhaseStatus(
             phase="Phase 4 — Enterprise Hardening",
-            status="completed",
+            status="in_progress",
             completed=(
                 "Offline checks",
                 "RBAC enforcement",
@@ -59,6 +75,12 @@ def compute_roadmap_status() -> list[PhaseStatus]:
                 "Validation reports",
                 "Signed audit artifact workflow",
             ),
-            pending=tuple(),
+            pending=(
+                "Full command, parameter, and container-digest provenance",
+                "Strict-mode confirmation for every mutating operation",
+                "Clinical validation and compliance hardening",
+                "Signed and notarized universal macOS app with bundled Python/Nextflow",
+                "Apple App Sandbox entitlement and production update channel",
+            ),
         ),
     ]

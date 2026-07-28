@@ -36,3 +36,15 @@ def test_preflight_fail_on_workflow_violation(tmp_path, capsys):
     assert rc == 2
     payload = json.loads(capsys.readouterr().out)
     assert payload["checks"]["workflow"]["ok"] is False
+
+
+def test_preflight_requires_schema_and_params_together(tmp_path, capsys):
+    schema = tmp_path / "schema.json"
+    schema.write_text('{"type":"object"}', encoding="utf-8")
+
+    rc = cli.main(["preflight", "--schema", str(schema)])
+
+    assert rc == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["checks"]["schema"]["ok"] is False
+    assert "must be provided together" in payload["checks"]["schema"]["issues"][0]["message"]

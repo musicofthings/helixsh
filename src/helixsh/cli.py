@@ -5,13 +5,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 from helixsh.doctor import collect_doctor_results
+from helixsh.kubernetes import KubernetesConfig, write_kubernetes_config
 from helixsh.intent import intent_to_nf_args, parse_intent
 from helixsh.mcp import evaluate_capability
 from helixsh.nextflow import (
@@ -34,6 +34,7 @@ from helixsh.provenance import make_provenance_record
 from helixsh.container_policy import check_image_policy
 from helixsh.context import parse_nextflow_config_defaults, summarize_samplesheet
 from helixsh.offline import check_offline_readiness
+from helixsh.preflight import run_preflight
 from helixsh.gateway import approve_proposal, create_proposal, list_proposals
 from helixsh.resources import estimate_resources
 from helixsh.executor import build_posix_exec, run_posix_exec
@@ -83,8 +84,15 @@ def make_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--execute", action="store_true", help="Actually execute Nextflow.")
     run_parser.add_argument("--yes", action="store_true", help="Confirm execution in strict mode.")
     run_parser.add_argument("--nf-arg", action="append", default=[], help="Extra argument passed directly to Nextflow (repeatable).")
+    run_parser.add_argument("--schema", help="Schema JSON to validate before execution (requires --params).")
+    run_parser.add_argument("--params", help="Parameter JSON to validate before execution (requires --schema).")
+    run_parser.add_argument("--workflow", help="Nextflow source to check before execution.")
+    run_parser.add_argument("--cache-root", help="Offline cache root to check; defaults to .helixsh_cache with --offline.")
+    run_parser.add_argument("--config", help="nextflow.config context to inspect before execution.")
+    run_parser.add_argument("--image", help="Container image reference to check before execution.")
 
-    subparsers.add_parser("doctor", help="Show environment diagnostics.")
+    doctor_parser = subparsers.add_parser("doctor", help="Show environment diagnostics.")
+    doctor_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
 
     explain_parser = subparsers.add_parser("explain", help="Explain latest command plan.")
     explain_parser.add_argument("scope", nargs="?", default="last")
@@ -203,6 +211,13 @@ def make_parser() -> argparse.ArgumentParser:
     pre_parser.add_argument("--config")
     pre_parser.add_argument("--image")
 
+    k8s_parser = subparsers.add_parser("k8s-config", help="Generate a constrained nf-k8s Nextflow config.")
+    k8s_parser.add_argument("--namespace", default="default")
+    k8s_parser.add_argument("--service-account", default="nextflow")
+    k8s_parser.add_argument("--storage-claim", required=True)
+    k8s_parser.add_argument("--storage-mount-path", default="/workspace")
+    k8s_parser.add_argument("--out", required=True)
+
     return parser
 
 
@@ -212,6 +227,9 @@ def cmd_run(args: argparse.Namespace, strict: bool, role: str) -> int:
 
     runtime = validate_runtime(args.runtime)
     input_file = validate_input_file(args.input_file)
+    config_file = validate_input_file(args.config)
+    if runtime == "kubernetes" and not config_file:
+        raise HelixshError("Kubernetes execution requires --config with an nf-k8s configuration.")
     pipeline = normalize_pipeline(args.org, args.pipeline)
 
     cfg = RunConfig(
@@ -220,13 +238,54 @@ def cmd_run(args: argparse.Namespace, strict: bool, role: str) -> int:
         input_file=input_file,
         resume=args.resume,
         extra_args=tuple((["-offline"] if args.offline else []) + args.nf_arg),
+        config_file=config_file,
     )
     command = build_nextflow_run_command(cfg)
     rendered = format_shell_command(command)
 
-    provenance_params = {"pipeline": pipeline, "runtime": runtime, "resume": args.resume, "offline": args.offline}
+    provenance_params = {
+        "pipeline": pipeline,
+        "runtime": runtime,
+        "input_file": input_file,
+        "resume": args.resume,
+        "offline": args.offline,
+        "extra_args": list(cfg.extra_args),
+        "workflow": args.workflow,
+        "image": args.image,
+        "config_file": config_file,
+    }
     record = make_provenance_record(command=rendered, params=provenance_params)
     write_audit(AuditEvent(timestamp=datetime.now(UTC).isoformat(), command=rendered, strict=strict, mode="run", role=role, execution_hash=record.execution_hash, provenance_params=provenance_params))
+
+    cache_root = args.cache_root or (".helixsh_cache" if args.offline else None)
+    preflight_requested = any(
+        (
+            args.schema,
+            args.params,
+            args.workflow,
+            cache_root,
+            input_file,
+            args.config,
+            args.image is not None,
+        )
+    )
+    if preflight_requested:
+        preflight = run_preflight(
+            schema=args.schema,
+            params=args.params,
+            workflow=args.workflow,
+            cache_root=cache_root,
+            samplesheet=input_file,
+            config=args.config,
+            image=args.image,
+            runtime=runtime,
+        )
+        print(f"[helixsh] preflight: {json.dumps(asdict(preflight), sort_keys=True)}")
+        if not preflight.ok:
+            if args.execute:
+                print("[helixsh] execution blocked: preflight validation failed")
+                return 2
+            print("[helixsh] preflight warning: execution would be blocked")
 
     print(f"[helixsh] planned: {rendered}")
     print("[helixsh] execution boundary: POSIX shell / Nextflow")
@@ -238,16 +297,39 @@ def cmd_run(args: argparse.Namespace, strict: bool, role: str) -> int:
         print("[helixsh] strict mode requires explicit confirmation via --yes")
         return 2
     if args.execute:
-        completed = subprocess.run(command, check=False)
-        return completed.returncode
+        return run_posix_exec(command)
 
     print("[helixsh] dry-run complete (use --execute to run).")
     return 0
 
 
-def cmd_doctor() -> int:
-    for result in collect_doctor_results():
+def cmd_doctor(json_output: bool = False) -> int:
+    results = collect_doctor_results()
+    if json_output:
+        print(json.dumps([asdict(result) for result in results], indent=2))
+        return 0
+    for result in results:
         print(f"{result.name:11} {result.state:7} {result.details}")
+    return 0
+
+
+def cmd_k8s_config(
+    namespace: str,
+    service_account: str,
+    storage_claim: str,
+    storage_mount_path: str,
+    out: str,
+) -> int:
+    destination = write_kubernetes_config(
+        out,
+        KubernetesConfig(
+            namespace=namespace,
+            service_account=service_account,
+            storage_claim=storage_claim,
+            storage_mount_path=storage_mount_path,
+        ),
+    )
+    print(json.dumps({"ok": True, "path": str(destination)}, indent=2))
     return 0
 
 
@@ -562,37 +644,17 @@ def cmd_posix_wrap(args: list[str], execute: bool) -> int:
 
 
 def cmd_preflight(schema: str | None, params: str | None, workflow: str | None, cache_root: str | None, samplesheet: str | None, config: str | None, image: str | None) -> int:
-    checks: dict[str, dict] = {}
-
-    if schema and params:
-        result = validate_params(load_json(schema), load_json(params))
-        checks["schema"] = {"ok": result.ok, "issues": [asdict(i) for i in result.issues]}
-
-    if workflow:
-        nodes = parse_process_nodes(Path(workflow).read_text(encoding="utf-8"))
-        violations = container_violations(nodes)
-        checks["workflow"] = {"ok": len(violations) == 0, "violations": violations}
-
-    if cache_root:
-        off = check_offline_readiness(cache_root)
-        checks["offline"] = {"ok": off.ready, **asdict(off)}
-
-    if samplesheet or config:
-        ctx: dict = {}
-        if samplesheet:
-            ctx["samplesheet"] = asdict(summarize_samplesheet(samplesheet))
-        if config:
-            ctx["nextflow_config"] = asdict(parse_nextflow_config_defaults(config))
-        checks["context"] = {"ok": True, **ctx}
-
-    if image is not None:
-        img = check_image_policy(image)
-        checks["image"] = {"ok": img.allowed, **asdict(img)}
-
-    overall_ok = all(item.get("ok", True) for item in checks.values()) if checks else False
-    payload = {"ok": overall_ok, "checks": checks}
-    print(json.dumps(payload, indent=2))
-    return 0 if overall_ok else 2
+    result = run_preflight(
+        schema=schema,
+        params=params,
+        workflow=workflow,
+        cache_root=cache_root,
+        samplesheet=samplesheet,
+        config=config,
+        image=image,
+    )
+    print(json.dumps(asdict(result), indent=2))
+    return 0 if result.ok else 2
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -608,7 +670,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "run":
             return cmd_run(args, strict=strict, role=getattr(args, "role", "analyst"))
         if args.command == "doctor":
-            return cmd_doctor()
+            return cmd_doctor(args.json)
         if args.command == "explain":
             return cmd_explain(args.scope)
         if args.command == "plan":
@@ -667,6 +729,14 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_preflight(args.schema, args.params, args.workflow, args.cache_root, args.samplesheet, args.config, args.image)
         if args.command == "posix-wrap":
             return cmd_posix_wrap(args.args, args.execute)
+        if args.command == "k8s-config":
+            return cmd_k8s_config(
+                args.namespace,
+                args.service_account,
+                args.storage_claim,
+                args.storage_mount_path,
+                args.out,
+            )
 
         parser.print_help()
         return 0

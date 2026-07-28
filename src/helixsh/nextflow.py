@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-SUPPORTED_RUNTIMES = {"docker", "podman", "singularity", "apptainer"}
+SUPPORTED_RUNTIMES = {"docker", "podman", "singularity", "apptainer", "kubernetes"}
 
 
 class HelixshError(ValueError):
@@ -20,6 +20,7 @@ class RunConfig:
     input_file: str | None = None
     resume: bool = False
     extra_args: tuple[str, ...] = ()
+    config_file: str | None = None
 
 
 def normalize_pipeline(org: str, pipeline: str) -> str:
@@ -51,7 +52,12 @@ def validate_input_file(input_file: str | None) -> str | None:
 
 
 def build_nextflow_run_command(config: RunConfig) -> list[str]:
-    cmd: list[str] = ["nextflow", "run", config.pipeline, "-profile", config.profile]
+    cmd: list[str] = ["nextflow"]
+    if config.config_file:
+        cmd.extend(["-c", config.config_file])
+    cmd.extend(["run", config.pipeline])
+    if config.profile != "kubernetes":
+        cmd.extend(["-profile", config.profile])
     if config.input_file:
         cmd.extend(["--input", config.input_file])
     if config.resume:
