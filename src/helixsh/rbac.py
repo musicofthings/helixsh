@@ -39,6 +39,7 @@ _ANALYST_EXTRA = {
     "envmodules-wrap",
     "tower-submit",
     "snakemake-import",
+    "k8s-config",
 }
 
 # Admin-only additions (e.g. installing system-wide packages)

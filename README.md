@@ -1,8 +1,16 @@
-# helixsh
+# Helixsh
 
-**Bioinformatics-first AI shell for Nextflow and nf-core.**
+**A desktop control room and bioinformatics-first CLI for Nextflow and nf-core.**
 
-helixsh is a zero-dependency Python CLI that wraps Nextflow and nf-core pipelines with intent parsing, schema validation, resource estimation, audit trails, cloud cost estimates, HPC environment module generation, Seqera Platform integration, and more — all without any PyPI dependencies beyond Python 3.10+.
+Helixsh wraps Nextflow and nf-core pipelines with reviewed execution plans,
+runtime readiness checks, schema validation, resource estimation, audit trails,
+cloud cost estimates, HPC integration, and Seqera Platform support. Use the
+focused Electron runner, the Tauri command shell, or the zero-dependency Python
+CLI.
+
+[Website](https://musicofthings.github.io/helixsh/) ·
+[Desktop apps](#desktop-apps) ·
+[Quick start](#quick-start)
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org)
 [![Zero dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen)](pyproject.toml)
@@ -15,6 +23,7 @@ helixsh is a zero-dependency Python CLI that wraps Nextflow and nf-core pipeline
 - [Features](#features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Desktop Apps](#desktop-apps)
 - [Commands Reference](#commands-reference)
   - [Core Execution](#core-execution)
   - [Intent Parsing](#intent-parsing)
@@ -45,7 +54,8 @@ helixsh is a zero-dependency Python CLI that wraps Nextflow and nf-core pipeline
 
 | Category | Capabilities |
 |---|---|
-| **Execution** | Nextflow run with Docker, Podman, Singularity, Apptainer, Conda |
+| **Desktop** | Focused Electron pipeline runner plus a Tauri/Svelte command shell |
+| **Execution** | Nextflow with Docker, Kubernetes, Podman, Singularity, Apptainer, Conda |
 | **Intent** | Natural-language → Nextflow plan (RNA-seq, WGS, WES, ChIP-seq, ATAC-seq, …) |
 | **Pipelines** | 20-pipeline bundled registry with version checks |
 | **Samplesheets** | Validate and auto-generate nf-core CSV samplesheets |
@@ -86,7 +96,25 @@ Build a self-contained zipapp that runs on any Python 3.10+ without a venv:
 
 Copy `dist/helixsh.pyz` anywhere on your `$PATH` and rename it `helixsh`.
 
-### Option 3 — run without installing
+### Option 3 — desktop applications
+
+For the focused nf-core runner:
+
+```bash
+nvm use
+npm install
+npm run desktop:dev
+```
+
+For the Tauri command shell:
+
+```bash
+cd ui
+npm install
+npm run tauri dev
+```
+
+### Option 4 — run without installing
 
 ```bash
 python -m helixsh doctor
@@ -98,7 +126,9 @@ python -m helixsh doctor
 |---|---|
 | Python 3.10+ | No third-party packages needed |
 | Nextflow 25.x | `java` 17+ must be on `$PATH` |
-| Docker / Podman / Singularity / Apptainer | At least one container runtime |
+| Docker / Kubernetes / Podman / Singularity / Apptainer | At least one execution target |
+| Node.js 22.12+ | Focused Electron runner |
+| Rust 1.80+ and Node.js 20+ | Tauri command shell |
 | conda / mamba (optional) | For `-with-conda` workflows |
 
 ---
@@ -140,6 +170,59 @@ helixsh tower-submit --pipeline nf-core/rnaseq --profile docker \
 
 ---
 
+## Desktop Apps
+
+Helixsh includes two complementary desktop surfaces:
+
+| App | Best for | Location |
+|---|---|---|
+| **Focused runner** | Configure, validate, and run an nf-core pipeline with Docker or Kubernetes | `desktop/` |
+| **Command shell** | Explore the complete Helixsh command set with streaming command blocks | `ui/` |
+
+### Focused nf-core runner
+
+The Electron runner uses a sandboxed, context-isolated renderer with no Node.js
+integration. File paths must come from native pickers, IPC requests are
+allowlisted and validated, and the main process requires the exact reviewed
+plan plus a native confirmation before execution.
+
+It provides:
+
+- nf-core pipeline and revision selection
+- Docker, Kubernetes, Podman, Apptainer, and Singularity targets
+- Docker-daemon and Kubernetes-cluster readiness checks
+- generated, validated `nf-k8s` 1.5.5 configuration
+- live output and full process-group cancellation
+- deterministic argument arrays and the Helixsh POSIX execution boundary
+
+Build the current machine's macOS application bundle:
+
+```bash
+npm run desktop:test
+npm run desktop:pack:mac
+```
+
+The unsigned development bundle is written to
+`dist-desktop/Helixsh-darwin-*/Helixsh.app`. Code signing, notarization,
+universal packaging, and bundled Python/Nextflow runtimes remain release work.
+
+### Tauri command shell
+
+The Tauri/Svelte application offers Warp-style command blocks, intent mode,
+autocomplete, command history, RBAC and strict-mode controls, live doctor
+status, and nf-core pipeline discovery.
+
+```bash
+cd ui
+npm run build
+npm run tauri build
+```
+
+See [`ui/README.md`](ui/README.md) for platform prerequisites and sidecar
+packaging.
+
+---
+
 ## Commands Reference
 
 Global flags available on every command:
@@ -177,7 +260,7 @@ Options:
 
 | Flag | Description |
 |---|---|
-| `--runtime` | `docker`, `podman`, `singularity`, `apptainer`, `conda` |
+| `--runtime` | `docker`, `kubernetes`, `podman`, `singularity`, `apptainer`, `conda` |
 | `--input` | Path to samplesheet CSV |
 | `--resume` | Add `-resume` to resume from cache |
 | `--outdir` | Output directory |
@@ -192,7 +275,9 @@ Check that all required tools are installed and show their versions.
 helixsh doctor
 ```
 
-Checks: `nextflow`, `java`, `docker`, `podman`, `singularity`, `apptainer`, `conda`, `mamba`, `micromamba`, `git`.
+Checks: `nextflow`, `java`, Docker daemon, `kubectl`, Kubernetes cluster,
+`podman`, `singularity`, `apptainer`, `conda`, `mamba`, `micromamba`, and
+`git`.
 
 #### `plan`
 
@@ -225,6 +310,24 @@ helixsh preflight \
     --samplesheet samplesheet.csv \
     --config nextflow.config \
     --image ghcr.io/nf-core/rnaseq@sha256:abc123
+```
+
+#### `k8s-config`
+
+Generate a constrained Nextflow configuration for the `nf-k8s` executor:
+
+```bash
+helixsh k8s-config \
+    --namespace genomics \
+    --service-account nextflow \
+    --storage-claim nextflow-pvc \
+    --out nextflow.k8s.config
+
+helixsh run nf-core/rnaseq \
+    --runtime kubernetes \
+    --config nextflow.k8s.config \
+    --input samplesheet.csv \
+    --outdir results
 ```
 
 ---
@@ -906,7 +1009,7 @@ Every command is gated by one of three built-in roles. Pass `--role <role>` glob
 | Role | Description | Additional permissions vs. previous role |
 |---|---|---|
 | `auditor` | Read-only inspection | `doctor`, `explain`, `plan`, `validate-schema`, `parse-workflow`, `diagnose`, `cache-report`, `roadmap-status`, `rbac-check`, `report`, `context-check`, `offline-check`, `audit-export`, `audit-verify`, `audit-sign`, `audit-verify-signature`, `resource-estimate`, `fit-calibration`, `image-check`, `agent-run`, `arbitrate`, `compliance-check`, `mcp-check`, `mcp-proposals`, `nf-auth`, `ref-list`, `pipeline-list`, `envmodules-list`, `tower-auth`, `tower-status`, `tower-envs`, `trace-summary`, `cost-estimate` |
-| `analyst` | + pipeline operations | All auditor commands + `run`, `intent`, `profile-suggest`, `provenance`, `posix-wrap`, `preflight`, `execution-start`, `execution-finish`, `audit-show`, `mcp-propose`, `mcp-approve`, `mcp-execute`, `claude-plan`, `nf-launch`, `samplesheet-validate`, `samplesheet-generate`, `ref-download`, `pipeline-update`, `envmodules-wrap`, `tower-submit`, `snakemake-import` |
+| `analyst` | + pipeline operations | All auditor commands + `run`, `k8s-config`, `intent`, `profile-suggest`, `provenance`, `posix-wrap`, `preflight`, `execution-start`, `execution-finish`, `audit-show`, `mcp-propose`, `mcp-approve`, `mcp-execute`, `claude-plan`, `nf-launch`, `samplesheet-validate`, `samplesheet-generate`, `ref-download`, `pipeline-update`, `envmodules-wrap`, `tower-submit`, `snakemake-import` |
 | `admin` | + environment management | All analyst commands + `conda-install`, `conda-env`, `conda-search` |
 
 Example:
@@ -951,7 +1054,8 @@ helixsh --strict run nf-core/rnaseq --runtime docker --input s.csv --execute --y
 # → runs
 ```
 
-Use strict mode in clinical genomics, regulated HPC, or production environments.
+Strict mode is intended for controlled environments, but the current
+development release is not clinically validated.
 
 ### Audit log
 
@@ -1032,28 +1136,19 @@ pytest tests/test_features.py -v
 pytest --tb=short -q
 ```
 
-The test suite covers 188+ tests across all modules with no network calls (all external I/O is mocked or bypassed by dry-run defaults).
+The test suite covers the CLI and desktop boundary without requiring live
+pipeline execution.
 
 ---
 
 
-## Project Health (as of 2026-05-21)
+## Project Health (as of 2026-07-28)
 
-- Test suite status: **188 passed** (`python -m pytest -q`).
+- Python test suite: **203 passed** (`python3 -m pytest -q`).
+- Electron boundary suite: **7 passed** (`npm run desktop:test`).
+- Tauri/Svelte production build: **pass** (`npm --prefix ui run build`).
 - Bytecode compile check: **pass** (`python -m compileall -q src`).
-- UI dependency check via `npm outdated` was **blocked by registry policy (HTTP 403)** in this environment.
-- Rust dependency check via `cargo outdated` requires installing the external `cargo-outdated` subcommand first.
-
-### External tool/dependency freshness snapshot
-
-Based on upstream package registries and docs looked up on 2026-05-21:
-
-- Nextflow stable docs currently show **v25.10.3** (project requires `25.x`).
-- `@tauri-apps/api` latest visible npm version is **2.8.0** (project range: `^2`).
-- `@tauri-apps/cli` latest visible npm version is **2.8.4** (project range: `^2`).
-- `vite` latest visible npm version is **7.1.5** (project range: `^6`; consider validating upgrade path to v7).
-
-> Recommendation: keep `^2` Tauri ranges as-is unless you need a specific bugfix, and schedule a controlled Vite 6 → 7 UI upgrade with a quick smoke test.
+- Electron and Tauri dependency audits: **0 vulnerabilities**.
 
 ## Packaging
 

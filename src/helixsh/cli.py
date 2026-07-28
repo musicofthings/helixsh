@@ -279,6 +279,16 @@ def make_parser() -> argparse.ArgumentParser:
     pre_parser.add_argument("--config")
     pre_parser.add_argument("--image")
 
+    k8s_parser = subparsers.add_parser(
+        "k8s-config",
+        help="Generate a constrained nf-k8s Nextflow config.",
+    )
+    k8s_parser.add_argument("--namespace", default="default")
+    k8s_parser.add_argument("--service-account", default="nextflow")
+    k8s_parser.add_argument("--storage-claim", required=True)
+    k8s_parser.add_argument("--storage-mount-path", default="/workspace")
+    k8s_parser.add_argument("--out", required=True)
+
     # ── Execution lifecycle ────────────────────────────────────────────────────
     exec_start = subparsers.add_parser("execution-start", help="Record execution start in provenance DB.")
     exec_start.add_argument("--command", dest="run_command", required=True)
@@ -446,6 +456,7 @@ def cmd_run(args: argparse.Namespace, strict: bool, role: str) -> int:
         resume=args.resume,
         extra_args=tuple((["-offline"] if args.offline else []) + args.nf_arg),
         outdir=getattr(args, "outdir", None),
+        config_file=config_file,
     )
     command = build_nextflow_run_command(cfg)
     rendered = format_shell_command(command)
@@ -1318,6 +1329,14 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_preflight(args.schema, args.params, args.workflow, args.cache_root, args.samplesheet, args.config, args.image)
         if args.command == "posix-wrap":
             return cmd_posix_wrap(args.args, args.execute)
+        if args.command == "k8s-config":
+            return cmd_k8s_config(
+                args.namespace,
+                args.service_account,
+                args.storage_claim,
+                args.storage_mount_path,
+                args.out,
+            )
         if args.command == "execution-start":
             return cmd_execution_start(
                 command=args.run_command,

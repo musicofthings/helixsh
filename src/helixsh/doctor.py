@@ -18,7 +18,9 @@ CHECKS = (
     ("nextflow", ["nextflow", "-version"]),
     # java -version writes to stderr, so we capture both streams
     ("java", ["java", "-version"]),
-    ("docker", ["docker", "--version"]),
+    ("docker", ["docker", "info", "--format", "Docker server {{.ServerVersion}}"]),
+    ("kubectl", ["kubectl", "version", "--client"]),
+    ("kubernetes", ["kubectl", "cluster-info"]),
     ("podman", ["podman", "--version"]),
     ("singularity", ["singularity", "--version"]),
     ("apptainer", ["apptainer", "--version"]),
