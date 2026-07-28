@@ -1,0 +1,139 @@
+name: Build helixsh UI (Tauri)
+
+on:
+  push:
+    branches: [main, "claude/tauri-ui"]
+    paths: ["ui/**"]
+  pull_request:
+    paths: ["ui/**"]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libgtk-3-dev \
+            libgdk-pixbuf-2.0-dev \
+            xdg-dbus-proxy
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./ui/src-tauri -> target"
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install npm dependencies
+        working-directory: ui
+        run: npm ci
+
+      - name: Build Svelte frontend
+        working-directory: ui
+        run: npm run build
+
+      - name: Cargo check (Rust backend)
+        working-directory: ui/src-tauri
+        run: cargo check
+
+      - name: Build Tauri app
+        working-directory: ui
+        run: npx tauri build --no-bundle
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: helixsh-linux
+          path: ui/src-tauri/target/release/helixsh-ui
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./ui/src-tauri -> target"
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install npm dependencies
+        working-directory: ui
+        run: npm ci
+
+      - name: Build Svelte frontend
+        working-directory: ui
+        run: npm run build
+
+      - name: Build Tauri app
+        working-directory: ui
+        run: npx tauri build --no-bundle
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: helixsh-macos
+          path: ui/src-tauri/target/release/helixsh-ui
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./ui/src-tauri -> target"
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install npm dependencies
+        working-directory: ui
+        run: npm ci
+
+      - name: Build Svelte frontend
+        working-directory: ui
+        run: npm run build
+
+      - name: Build Tauri app
+        working-directory: ui
+        run: npx tauri build --no-bundle
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: helixsh-windows
+          path: ui/src-tauri/target/release/helixsh-ui.exe

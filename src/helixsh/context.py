@@ -33,13 +33,23 @@ def summarize_samplesheet(path: str) -> SampleSheetSummary:
 
     sample_ids: list[str] = []
     tumor_normal = False
+    sarek_statuses: set[str] = set()
     for row in rows:
         sample = (row.get("sample") or row.get("sample_id") or "").strip()
         if sample:
             sample_ids.append(sample)
+        # nf-core/sarek uses a numeric status column: 0=normal, 1=tumor
+        sarek_status = str(row.get("status", "")).strip()
+        if sarek_status in {"0", "1"}:
+            sarek_statuses.add(sarek_status)
+        # other pipelines may use condition/type with string values
         role = (row.get("condition") or row.get("type") or "").strip().lower()
         if role in {"tumor", "normal"}:
             tumor_normal = True
+
+    # sarek tumor-normal pair requires both a normal (0) and a tumor (1) sample
+    if "0" in sarek_statuses and "1" in sarek_statuses:
+        tumor_normal = True
 
     return SampleSheetSummary(row_count=len(rows), has_tumor_normal=tumor_normal, sample_ids=tuple(sample_ids))
 
