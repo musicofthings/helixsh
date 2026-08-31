@@ -122,3 +122,31 @@ test("reports a missing storage claim as missing rather than malformed", () => {
     /storage claim is required/,
   );
 });
+
+test("refuses an nf-k8s config on a non-Kubernetes run", () => {
+  const request = {
+    pipeline: "rnaseq",
+    runtime: "docker",
+    outputPath: "/data/results",
+    configPath: "/home/u/.config/helixsh-desktop/kubernetes/nf-k8s-abc.config",
+  };
+  assert.throws(() => validateRunRequest(request), /applies only to Kubernetes runs/);
+  assert.throws(() => buildRunArgs(request), /applies only to Kubernetes runs/);
+});
+
+test("still threads the config through a Kubernetes run", () => {
+  const args = buildRunArgs({
+    pipeline: "sarek",
+    runtime: "kubernetes",
+    configPath: "/cfg/nf-k8s.config",
+  });
+  assert.deepEqual(args, [
+    "run",
+    "nf-core",
+    "sarek",
+    "--runtime",
+    "kubernetes",
+    "--config",
+    "/cfg/nf-k8s.config",
+  ]);
+});

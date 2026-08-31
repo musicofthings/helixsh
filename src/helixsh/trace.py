@@ -95,8 +95,15 @@ def _parse_memory(s: str) -> float:
 
 
 def _extract_process_name(name: str) -> str:
-    """Extract base process name from task name.  e.g. 'STAR_ALIGN (sample1)' → 'STAR_ALIGN'."""
-    return name.split("(")[0].strip().split(":")[0].strip()
+    """Extract base process name from task name.
+
+    Nextflow writes the fully qualified name, so the process is the *last*
+    colon-separated segment:
+    'NFCORE_RNASEQ:RNASEQ:ALIGN_STAR:STAR_ALIGN (sample1)' → 'STAR_ALIGN'.
+    Taking the first segment instead collapsed every task in a run into a
+    single bucket named after the top-level workflow.
+    """
+    return name.split("(")[0].strip().split(":")[-1].strip()
 
 
 def parse_trace(path: str) -> TraceSummary:

@@ -71,6 +71,13 @@ function validateRunRequest(payload) {
   if (request.runtime === "kubernetes" && !request.configPath) {
     throw new TypeError("Kubernetes runs require a generated or selected nf-k8s config");
   }
+  // The generated config pins `process.executor = 'k8s'`, which overrides the
+  // selected profile. Carrying one over from an earlier Kubernetes session
+  // would route a "Local Docker" run at a cluster while readiness was only
+  // checked for Docker, so the two must not be combined.
+  if (request.runtime !== "kubernetes" && request.configPath) {
+    throw new TypeError("an nf-k8s config applies only to Kubernetes runs");
+  }
   if (request.image.length > 512 || /[\r\n\0]/.test(request.image)) {
     throw new TypeError("image reference is invalid");
   }

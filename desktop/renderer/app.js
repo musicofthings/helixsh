@@ -152,6 +152,13 @@ document.querySelectorAll("[data-picker]").forEach((button) => {
 byId("runtime").addEventListener("change", () => {
   const isKubernetes = byId("runtime").value === "kubernetes";
   byId("kubernetes-panel").classList.toggle("hidden", !isKubernetes);
+  if (!isKubernetes) {
+    // Hiding the panel must also drop the generated config: it is invisible
+    // once hidden, and leaving it attached would apply the k8s executor to a
+    // local run.
+    byId("configPath").value = "";
+    byId("k8s-config-state").textContent = "Not generated";
+  }
   plannedFingerprint = "";
 });
 byId("run-form").addEventListener("submit", (event) => {

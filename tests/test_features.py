@@ -233,6 +233,29 @@ def test_trace_summary_aggregates_processes(tmp_path, capsys):
     assert star["max_peak_rss_mb"] > 0
 
 
+# Nextflow writes fully qualified task names; the bare names above are not
+# what a real nf-core run produces.
+QUALIFIED_TRACE_CONTENT = """\
+task_id\thash\tnative_id\tname\tstatus\texit\tsubmit\tduration\trealtime\t%cpu\tpeak_rss\tpeak_vmem\trchar\twchar
+1\tab/123\t101\tNFCORE_RNASEQ:RNASEQ:ALIGN_STAR:STAR_ALIGN (S1)\tCOMPLETED\t0\t2026-01-01\t2m 30s\t2m 15s\t780\t12 GB\t14 GB\t10 GB\t2 GB
+2\tcd/456\t102\tNFCORE_RNASEQ:RNASEQ:ALIGN_STAR:STAR_ALIGN (S2)\tCOMPLETED\t0\t2026-01-01\t3m\t2m 45s\t820\t14 GB\t16 GB\t11 GB\t2.5 GB
+3\tef/789\t103\tNFCORE_RNASEQ:RNASEQ:QUANTIFY:SALMON_QUANT (S1)\tCOMPLETED\t0\t2026-01-01\t30s\t28s\t180\t2 GB\t3 GB\t1 GB\t500 MB
+4\tgh/000\t104\tNFCORE_RNASEQ:RNASEQ:MULTIQC\tCOMPLETED\t0\t2026-01-01\t10s\t9s\t100\t500 MB\t600 MB\t200 MB\t50 MB
+"""
+
+
+def test_trace_summary_groups_fully_qualified_names(tmp_path, capsys):
+    """A real nf-core trace must split per process, not collapse into the workflow."""
+    trace = tmp_path / "trace.txt"
+    trace.write_text(QUALIFIED_TRACE_CONTENT, encoding="utf-8")
+    cli.main(["trace-summary", "--file", str(trace)])
+    data = json.loads(capsys.readouterr().out)
+    names = sorted(p["process"] for p in data["processes"])
+    assert names == ["MULTIQC", "SALMON_QUANT", "STAR_ALIGN"]
+    star = next(p for p in data["processes"] if p["process"] == "STAR_ALIGN")
+    assert star["task_count"] == 2
+
+
 def test_trace_summary_missing_file(tmp_path, capsys):
     rc = cli.main(["trace-summary", "--file", str(tmp_path / "missing.txt")])
     assert rc == 2
