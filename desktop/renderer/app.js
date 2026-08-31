@@ -59,7 +59,10 @@ async function loadCapabilities() {
       container.appendChild(chip);
     }
   } catch (error) {
-    container.innerHTML = '<span class="status-chip missing">Backend unavailable</span>';
+    const chip = document.createElement("span");
+    chip.className = "status-chip missing";
+    chip.textContent = "Backend unavailable";
+    container.replaceChildren(chip);
     appendConsole(`${error.message}\n`, "stderr");
   }
 }

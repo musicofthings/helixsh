@@ -10,6 +10,11 @@ from pathlib import Path
 
 NF_K8S_PLUGIN_VERSION = "1.5.5"
 K8S_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+# Values are interpolated into single-quoted Groovy strings, where a trailing
+# backslash escapes the closing quote. An allow-list is used rather than a
+# deny-list of dangerous characters so nothing that can break out of the
+# quoting reaches the rendered config.
+K8S_MOUNT_PATH_RE = re.compile(r"^/(?:[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*)?$")
 
 
 @dataclass(frozen=True)
@@ -37,11 +42,7 @@ def validate_kubernetes_settings(config: KubernetesConfig) -> KubernetesConfig:
     service_account = _validate_k8s_name("service account", config.service_account, subdomain=True)
     storage_claim = _validate_k8s_name("storage claim", config.storage_claim, subdomain=True)
     mount_path = config.storage_mount_path.strip()
-    if (
-        not mount_path.startswith("/")
-        or posixpath.normpath(mount_path) != mount_path
-        or any(char in mount_path for char in "\r\n'\0")
-    ):
+    if not K8S_MOUNT_PATH_RE.fullmatch(mount_path) or posixpath.normpath(mount_path) != mount_path:
         raise ValueError("storage mount path must be a normalized absolute path")
     return KubernetesConfig(
         namespace=namespace,
@@ -76,8 +77,15 @@ def write_kubernetes_config(path: str, config: KubernetesConfig) -> Path:
     return destination
 
 
+def _strip_groovy_comments(text: str) -> str:
+    """Drop comments so a commented-out directive cannot satisfy a check."""
+    without_blocks = re.sub(r"/\*.*?\*/", " ", text, flags=re.DOTALL)
+    # (?<!:) keeps a URL scheme such as https:// from being read as a comment.
+    return re.sub(r"(?<!:)//[^\n]*", " ", without_blocks)
+
+
 def validate_kubernetes_config_file(path: str) -> tuple[str, ...]:
-    text = Path(path).read_text(encoding="utf-8")
+    text = _strip_groovy_comments(Path(path).read_text(encoding="utf-8"))
     issues: list[str] = []
     if not re.search(r"\bid\s+['\"]nf-k8s(?:@[0-9][0-9A-Za-z.-]*)?['\"]", text):
         issues.append("Kubernetes config must enable the nf-k8s plugin")

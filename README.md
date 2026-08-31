@@ -12,7 +12,7 @@ CLI.
 [Desktop apps](#desktop-apps) ·
 [Quick start](#quick-start)
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org)
 [![Zero dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -87,7 +87,7 @@ helixsh doctor
 
 ### Option 2 — single-file executable (`.pyz`)
 
-Build a self-contained zipapp that runs on any Python 3.10+ without a venv:
+Build a self-contained zipapp that runs on any Python 3.11+ without a venv:
 
 ```bash
 ./scripts/package_local.sh
@@ -124,7 +124,7 @@ python -m helixsh doctor
 
 | Requirement | Notes |
 |---|---|
-| Python 3.10+ | No third-party packages needed |
+| Python 3.11+ | No third-party packages needed |
 | Nextflow 25.x | `java` 17+ must be on `$PATH` |
 | Docker / Kubernetes / Podman / Singularity / Apptainer | At least one execution target |
 | Node.js 22.12+ | Focused Electron runner |
@@ -1159,7 +1159,7 @@ Build a single-file executable for distribution:
 ls -lh dist/helixsh.pyz
 ```
 
-The `.pyz` is a Python zipapp — copy it anywhere, make it executable, and run it directly. No installation required on any machine with Python 3.10+.
+The `.pyz` is a Python zipapp — copy it anywhere, make it executable, and run it directly. No installation required on any machine with Python 3.11+.
 
 ```bash
 chmod +x dist/helixsh.pyz

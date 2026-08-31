@@ -48,3 +48,28 @@ def test_preflight_requires_schema_and_params_together(tmp_path, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert payload["checks"]["schema"]["ok"] is False
     assert "must be provided together" in payload["checks"]["schema"]["issues"][0]["message"]
+
+
+def test_preflight_checks_kubernetes_config_via_runtime_flag(tmp_path, capsys):
+    config = tmp_path / "nf-k8s.config"
+    config.write_text("process.executor = 'local'\n", encoding="utf-8")
+
+    rc = cli.main(["preflight", "--runtime", "kubernetes", "--config", str(config)])
+
+    assert rc == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["checks"]["runtime"]["ok"] is False
+    assert payload["checks"]["runtime"]["issues"]
+
+
+def test_preflight_runtime_flag_passes_for_a_valid_k8s_config(tmp_path, capsys):
+    config = tmp_path / "nf-k8s.config"
+    config.write_text(
+        "plugins { id 'nf-k8s@1.5.5' }\nprocess.executor = 'k8s'\nk8s { storageClaimName = 'pvc' }\n",
+        encoding="utf-8",
+    )
+
+    rc = cli.main(["preflight", "--runtime", "kubernetes", "--config", str(config)])
+
+    assert rc == 0
+    assert json.loads(capsys.readouterr().out)["checks"]["runtime"]["ok"] is True

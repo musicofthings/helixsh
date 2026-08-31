@@ -1,3 +1,5 @@
+import shlex
+
 from helixsh.nextflow import HelixshError, RunConfig, build_nextflow_run_command, format_shell_command, normalize_pipeline, validate_runtime
 
 
@@ -45,3 +47,9 @@ def test_build_command():
 def test_shell_formatting_quotes_dangerous_tokens():
     cmd = format_shell_command(["nextflow", "run", "nf-core/rnaseq", "--input", "sample sheet.csv"])
     assert "'sample sheet.csv'" in cmd
+
+
+def test_shell_formatting_round_trips_through_shlex():
+    # The audit record must parse back to exactly the argv that was executed.
+    argv = ["nextflow", "run", "nf-core/rnaseq", "--input", "#a", "-c", "b\\c", "-r", "~dev", "-x", "f?.csv"]
+    assert shlex.split(format_shell_command(argv)) == argv

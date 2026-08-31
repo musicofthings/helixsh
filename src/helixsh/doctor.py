@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+
+CHECK_TIMEOUT_SECONDS = 10
 
 
 @dataclass(frozen=True)
@@ -31,6 +34,15 @@ CHECKS = (
 )
 
 
+def _first_line(*candidates: str) -> str:
+    """Return the first non-empty line across the given streams, in order."""
+    for candidate in candidates:
+        stripped = candidate.strip()
+        if stripped:
+            return stripped.splitlines()[0]
+    return "not available"
+
+
 def run_check(name: str, command: list[str]) -> CheckResult:
     try:
         result = subprocess.run(
@@ -39,18 +51,35 @@ def run_check(name: str, command: list[str]) -> CheckResult:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=10,
+            timeout=CHECK_TIMEOUT_SECONDS,
         )
     except FileNotFoundError:
         return CheckResult(name=name, state="missing", details="binary not found")
     except subprocess.TimeoutExpired:
-        return CheckResult(name=name, state="missing", details="check timed out")
+        # A timeout is not the same as an absent binary: the tool is installed
+        # but unresponsive, which points at a different fix.
+        return CheckResult(
+            name=name,
+            state="timeout",
+            details=f"check timed out after {CHECK_TIMEOUT_SECONDS}s",
+        )
 
-    state = "ok" if result.returncode == 0 else "missing"
-    # java -version prints to stderr; prefer stdout, fall back to stderr
-    raw = result.stdout.strip() or result.stderr.strip() or "not available"
-    return CheckResult(name=name, state=state, details=raw.splitlines()[0])
+    if result.returncode == 0:
+        # java -version prints to stderr; prefer stdout, fall back to stderr
+        return CheckResult(name=name, state="ok", details=_first_line(result.stdout, result.stderr))
+
+    # On failure the diagnosis lives on stderr. `docker info --format` still
+    # prints a half-filled template to stdout when the daemon is unreachable,
+    # so preferring stdout here would report "Docker server" and discard the
+    # actual reason the check failed.
+    return CheckResult(name=name, state="missing", details=_first_line(result.stderr, result.stdout))
 
 
 def collect_doctor_results() -> list[CheckResult]:
-    return [run_check(name, cmd) for name, cmd in CHECKS]
+    # The checks are independent and each can block for CHECK_TIMEOUT_SECONDS
+    # (`kubectl cluster-info` against an unreachable cluster, a stalled Docker
+    # socket). Run serially, the worst case was the sum of every timeout, which
+    # overran the desktop app's IPC budget on a machine with no cluster. In
+    # parallel it is bounded by the slowest single check.
+    with ThreadPoolExecutor(max_workers=max(1, len(CHECKS))) as pool:
+        return list(pool.map(lambda check: run_check(*check), CHECKS))

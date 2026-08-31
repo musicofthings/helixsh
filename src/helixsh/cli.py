@@ -278,6 +278,7 @@ def make_parser() -> argparse.ArgumentParser:
     pre_parser.add_argument("--samplesheet")
     pre_parser.add_argument("--config")
     pre_parser.add_argument("--image")
+    pre_parser.add_argument("--runtime", help="Runtime to check runtime-specific requirements for.")
 
     k8s_parser = subparsers.add_parser(
         "k8s-config",
@@ -476,34 +477,25 @@ def cmd_run(args: argparse.Namespace, strict: bool, role: str) -> int:
     write_audit(AuditEvent(timestamp=datetime.now(UTC).isoformat(), command=rendered, strict=strict, mode="run", role=role, execution_hash=record.execution_hash, provenance_params=provenance_params))
 
     cache_root = args.cache_root or (".helixsh_cache" if args.offline else None)
-    preflight_requested = any(
-        (
-            args.schema,
-            args.params,
-            args.workflow,
-            cache_root,
-            input_file,
-            args.config,
-            args.image is not None,
-        )
+    # Preflight always runs. Gating it on whether the caller happened to pass an
+    # optional input meant the shortest command -- the one most likely to be
+    # typed -- executed with no checks at all.
+    preflight = run_preflight(
+        schema=args.schema,
+        params=args.params,
+        workflow=args.workflow,
+        cache_root=cache_root,
+        samplesheet=input_file,
+        config=config_file,
+        image=args.image,
+        runtime=runtime,
     )
-    if preflight_requested:
-        preflight = run_preflight(
-            schema=args.schema,
-            params=args.params,
-            workflow=args.workflow,
-            cache_root=cache_root,
-            samplesheet=input_file,
-            config=args.config,
-            image=args.image,
-            runtime=runtime,
-        )
-        print(f"[helixsh] preflight: {json.dumps(asdict(preflight), sort_keys=True)}")
-        if not preflight.ok:
-            if args.execute:
-                print("[helixsh] execution blocked: preflight validation failed")
-                return 2
-            print("[helixsh] preflight warning: execution would be blocked")
+    print(f"[helixsh] preflight: {json.dumps(asdict(preflight), sort_keys=True)}")
+    if not preflight.ok:
+        if args.execute:
+            print("[helixsh] execution blocked: preflight validation failed")
+            return 2
+        print("[helixsh] preflight warning: execution would be blocked")
 
     print(f"[helixsh] planned: {rendered}")
     print("[helixsh] execution boundary: POSIX shell / Nextflow")
@@ -861,7 +853,7 @@ def cmd_posix_wrap(args: list[str], execute: bool) -> int:
     return 0
 
 
-def cmd_preflight(schema: str | None, params: str | None, workflow: str | None, cache_root: str | None, samplesheet: str | None, config: str | None, image: str | None) -> int:
+def cmd_preflight(schema: str | None, params: str | None, workflow: str | None, cache_root: str | None, samplesheet: str | None, config: str | None, image: str | None, runtime: str | None = None) -> int:
     result = run_preflight(
         schema=schema,
         params=params,
@@ -870,6 +862,7 @@ def cmd_preflight(schema: str | None, params: str | None, workflow: str | None, 
         samplesheet=samplesheet,
         config=config,
         image=image,
+        runtime=validate_runtime(runtime) if runtime else None,
     )
     print(json.dumps(asdict(result), indent=2))
     return 0 if result.ok else 2
@@ -1326,7 +1319,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "offline-check":
             return cmd_offline_check(args.cache_root)
         if args.command == "preflight":
-            return cmd_preflight(args.schema, args.params, args.workflow, args.cache_root, args.samplesheet, args.config, args.image)
+            return cmd_preflight(args.schema, args.params, args.workflow, args.cache_root, args.samplesheet, args.config, args.image, args.runtime)
         if args.command == "posix-wrap":
             return cmd_posix_wrap(args.args, args.execute)
         if args.command == "k8s-config":

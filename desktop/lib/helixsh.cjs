@@ -6,6 +6,10 @@ const RUNTIMES = new Set(["docker", "podman", "singularity", "apptainer", "kuber
 const PIPELINE_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const REVISION_RE = /^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,127}$/;
 const K8S_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+// Mirrors helixsh.kubernetes.K8S_MOUNT_PATH_RE. The value is interpolated into
+// a single-quoted Groovy string, where a trailing backslash escapes the closing
+// quote, so this allow-lists path characters instead of denying dangerous ones.
+const K8S_MOUNT_PATH_RE = /^\/(?:[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*)?$/;
 const MAX_PATH_LENGTH = 4096;
 
 function optionalPath(value, field) {
@@ -125,6 +129,11 @@ function validateKubernetesRequest(payload) {
     storageClaim: String(payload.storageClaim || "").trim().toLowerCase(),
     storageMountPath: String(payload.storageMountPath || "/workspace").trim(),
   };
+  // There is no sane default for a cluster's PVC, so say that plainly rather
+  // than letting the empty string fall through to a name-format complaint.
+  if (!result.storageClaim) {
+    throw new TypeError("storage claim is required");
+  }
   for (const [field, value, subdomain] of [
     ["namespace", result.namespace, false],
     ["service account", result.serviceAccount, true],
@@ -140,9 +149,8 @@ function validateKubernetesRequest(payload) {
     }
   }
   if (
-    !result.storageMountPath.startsWith("/") ||
-    path.posix.normalize(result.storageMountPath) !== result.storageMountPath ||
-    /[\r\n'\0]/.test(result.storageMountPath)
+    !K8S_MOUNT_PATH_RE.test(result.storageMountPath) ||
+    path.posix.normalize(result.storageMountPath) !== result.storageMountPath
   ) {
     throw new TypeError("storage mount path must be a normalized absolute path");
   }

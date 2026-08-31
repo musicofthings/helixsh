@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -82,11 +83,11 @@ def build_nextflow_run_command(config: RunConfig) -> list[str]:
 
 
 def format_shell_command(args: Iterable[str]) -> str:
-    """Render a shell-safe command string suitable for audit logs."""
-    escaped = []
-    for arg in args:
-        if not arg or any(ch in arg for ch in " \t\n\"'`$&|;()<>{}[]*"):
-            escaped.append("'" + arg.replace("'", "'\"'\"'") + "'")
-        else:
-            escaped.append(arg)
-    return " ".join(escaped)
+    """Render a shell-safe command string suitable for audit logs.
+
+    Quoting is delegated to :func:`shlex.quote` so the rendered string is a
+    faithful record of the argv it came from. A hand-rolled deny-list missed
+    ``#``, ``\\``, ``~`` and ``?``, which let an audited command differ from
+    the one a shell would actually run.
+    """
+    return " ".join(shlex.quote(arg) for arg in args)

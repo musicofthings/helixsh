@@ -20,6 +20,10 @@ const {
 } = require("./lib/helixsh.cjs");
 
 const MAX_CAPTURE_BYTES = 2 * 1024 * 1024;
+// `doctor` probes an unreachable cluster and a stalled Docker socket, each
+// bounded by the backend's own 10s per-check timeout. Give it room to report
+// those as capability states rather than surfacing an opaque IPC timeout.
+const DOCTOR_TIMEOUT_MS = 30_000;
 const selectedPaths = new Map();
 const jobs = new Map();
 let mainWindow = null;
@@ -100,8 +104,11 @@ function runBackend(args, { timeoutMs = 20_000 } = {}) {
     }, timeoutMs);
 
     const capture = (stream) => (chunk) => {
-      if (captured >= MAX_CAPTURE_BYTES) return;
-      const text = chunk.toString("utf8");
+      const remaining = MAX_CAPTURE_BYTES - captured;
+      if (remaining <= 0) return;
+      // Trim the chunk itself: checking only before appending let a single
+      // large chunk overshoot the cap by its entire length.
+      const text = chunk.subarray(0, remaining).toString("utf8");
       captured += Buffer.byteLength(text);
       if (stream === "stdout") stdout += text;
       else stderr += text;
@@ -174,7 +181,7 @@ function startRun(request) {
 }
 
 async function assertRuntimeReady(runtime) {
-  const result = await runBackend(["doctor", "--json"]);
+  const result = await runBackend(["doctor", "--json"], { timeoutMs: DOCTOR_TIMEOUT_MS });
   if (result.code !== 0) throw new Error(result.stderr || "Runtime readiness check failed");
   const capabilities = new Map(JSON.parse(result.stdout).map((item) => [item.name, item]));
   const unavailable = requiredCapabilities(runtime).filter(
@@ -188,7 +195,7 @@ async function assertRuntimeReady(runtime) {
 function registerIpc() {
   ipcMain.handle("helixsh:capabilities", async (event) => {
     assertTrustedSender(event);
-    const result = await runBackend(["doctor", "--json"]);
+    const result = await runBackend(["doctor", "--json"], { timeoutMs: DOCTOR_TIMEOUT_MS });
     if (result.code !== 0) throw new Error(result.stderr || "Capability check failed");
     return JSON.parse(result.stdout);
   });
@@ -332,7 +339,15 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
-  for (const child of jobs.values()) terminateJob(child);
+  for (const child of jobs.values()) {
+    // terminateJob rethrows anything that is not ESRCH; without this guard a
+    // single EPERM would abort the loop and leave the remaining jobs running.
+    try {
+      terminateJob(child);
+    } catch (error) {
+      process.stderr.write(`failed to terminate job: ${error.message}\n`);
+    }
+  }
 });
 
 app.on("window-all-closed", () => {

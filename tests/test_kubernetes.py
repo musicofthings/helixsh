@@ -115,3 +115,49 @@ def test_cli_requires_config_for_kubernetes(capsys):
 
     assert rc == 2
     assert "requires --config" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "mount_path",
+    ["/work\\", "/work'", "/work$hell", "/work space", "/work\nprocess.executor = 'local'"],
+)
+def test_render_kubernetes_config_rejects_groovy_quote_escapes(mount_path):
+    # A trailing backslash escapes the closing quote of the single-quoted
+    # Groovy string and lets the value run into the rest of the config.
+    with pytest.raises(ValueError, match="normalized absolute path"):
+        render_kubernetes_config(
+            KubernetesConfig(
+                namespace="default",
+                service_account="nextflow",
+                storage_claim="nextflow-pvc",
+                storage_mount_path=mount_path,
+            )
+        )
+
+
+@pytest.mark.parametrize("mount_path", ["/workspace", "/mnt/shared-data", "/mnt/nf_work.1", "/"])
+def test_render_kubernetes_config_accepts_ordinary_mount_paths(mount_path):
+    rendered = render_kubernetes_config(
+        KubernetesConfig(
+            namespace="default",
+            service_account="nextflow",
+            storage_claim="nextflow-pvc",
+            storage_mount_path=mount_path,
+        )
+    )
+    assert f"storageMountPath = '{mount_path.rstrip('/') or '/'}'" in rendered
+
+
+def test_validate_kubernetes_config_file_ignores_commented_out_directives(tmp_path):
+    config = tmp_path / "nf-k8s.config"
+    config.write_text(
+        "plugins { id 'nf-k8s@1.5.5' }\n"
+        "// process.executor = 'k8s'\n"
+        "/* k8s { storageClaimName = 'pvc' } */\n",
+        encoding="utf-8",
+    )
+
+    issues = validate_kubernetes_config_file(str(config))
+
+    assert any("process.executor" in issue for issue in issues)
+    assert any("storageClaimName" in issue for issue in issues)

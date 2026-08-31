@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from helixsh import cli
@@ -91,5 +92,25 @@ def test_run_uses_posix_boundary_after_successful_preflight(tmp_path, monkeypatc
 
         assert rc == 0
         assert commands == [["nextflow", "run", "nf-core/rnaseq", "-profile", "docker"]]
+    finally:
+        cli.AUDIT_FILE = old
+
+
+def test_run_always_preflights_even_without_optional_inputs(tmp_path, capsys, monkeypatch):
+    # A bare run used to skip preflight entirely because no optional input was
+    # passed; the runtime check must always be present.
+    old = cli.AUDIT_FILE
+    cli.AUDIT_FILE = tmp_path / "audit.jsonl"
+    monkeypatch.setattr(cli, "run_posix_exec", lambda _command: 0)
+    try:
+        rc = cli.main(["run", "nf-core", "rnaseq", "--runtime", "docker"])
+        assert rc == 0
+        line = next(
+            line for line in capsys.readouterr().out.splitlines()
+            if line.startswith("[helixsh] preflight: ")
+        )
+        payload = json.loads(line.removeprefix("[helixsh] preflight: "))
+        assert payload["ok"] is True
+        assert payload["checks"]["runtime"]["runtime"] == "docker"
     finally:
         cli.AUDIT_FILE = old

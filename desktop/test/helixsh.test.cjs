@@ -99,3 +99,26 @@ test("maps execution targets to runtime readiness capabilities", () => {
   assert.deepEqual(requiredCapabilities("docker"), ["nextflow", "docker"]);
   assert.deepEqual(requiredCapabilities("kubernetes"), ["nextflow", "kubernetes"]);
 });
+
+test("rejects a backslash that would escape the Groovy closing quote", () => {
+  for (const storageMountPath of ["/work\\", "/work$hell", "/work'", "/work space"]) {
+    assert.throws(
+      () =>
+        validateKubernetesRequest({
+          namespace: "default",
+          serviceAccount: "nextflow",
+          storageClaim: "nextflow-pvc",
+          storageMountPath,
+        }),
+      /normalized absolute path/,
+      `expected ${storageMountPath} to be rejected`,
+    );
+  }
+});
+
+test("reports a missing storage claim as missing rather than malformed", () => {
+  assert.throws(
+    () => validateKubernetesRequest({ namespace: "default", serviceAccount: "nextflow" }),
+    /storage claim is required/,
+  );
+});

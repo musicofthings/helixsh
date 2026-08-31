@@ -73,13 +73,19 @@ def run_preflight(
             context["nextflow_config"] = asdict(parse_nextflow_config_defaults(config))
         checks["context"] = {"ok": True, **context}
 
-    if runtime == "kubernetes":
-        issues = (
-            validate_kubernetes_config_file(config)
-            if config
-            else ("Kubernetes execution requires a Nextflow config file",)
-        )
-        checks["kubernetes"] = {"ok": not issues, "issues": list(issues)}
+    if runtime is not None:
+        # Always emit a runtime check when a runtime is known. It carries the
+        # runtime-specific requirements, and it guarantees `checks` is never
+        # empty on the execution path, so preflight cannot be skipped just
+        # because the caller passed no optional inputs.
+        issues: list[str] = []
+        if runtime == "kubernetes":
+            issues.extend(
+                validate_kubernetes_config_file(config)
+                if config
+                else ("Kubernetes execution requires a Nextflow config file",)
+            )
+        checks["runtime"] = {"ok": not issues, "runtime": runtime, "issues": issues}
 
     if image is not None:
         policy = check_image_policy(image)
