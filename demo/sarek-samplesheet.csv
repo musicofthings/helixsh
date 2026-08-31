@@ -1,0 +1,5 @@
+patient,sex,status,sample,lane,fastq_1,fastq_2
+PT01,XX,0,PT01_N,L001,/data/pt01_n_R1.fastq.gz,/data/pt01_n_R2.fastq.gz
+PT01,XX,1,PT01_T,L001,/data/pt01_t_R1.fastq.gz,/data/pt01_t_R2.fastq.gz
+PT02,XY,0,PT02_normal,L001,/data/pt02_n_R1.fastq.gz,/data/pt02_n_R2.fastq.gz
+PT02,XY,1,PT02_tumor,L001,/data/pt02_t_R1.fastq.gz,/data/pt02_t_R2.fastq.gz

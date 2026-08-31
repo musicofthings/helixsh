@@ -1,0 +1,5 @@
+sample,fastq_1,fastq_2,strandedness
+CTRL_REP1,/data/ctrl_1_R1.fastq.gz,/data/ctrl_1_R2.fastq.gz,auto
+CTRL_REP2,/data/ctrl_2_R1.fastq.gz,/data/ctrl_2_R2.fastq.gz,auto
+TREAT_REP1,/data/treat_1_R1.fastq.gz,/data/treat_1_R2.fastq.gz,auto
+TREAT_REP2,/data/treat_2_R1.fastq.gz,/data/treat_2_R2.fastq.gz,auto

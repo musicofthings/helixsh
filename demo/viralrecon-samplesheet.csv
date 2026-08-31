@@ -1,0 +1,3 @@
+sample,fastq_1,fastq_2
+SARS_CoV_2_A,/data/a_R1.fastq.gz,/data/a_R2.fastq.gz
+SARS_CoV_2_B,/data/b_R1.fastq.gz,/data/b_R2.fastq.gz

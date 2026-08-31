@@ -15,3 +15,6 @@ node_modules/
 helixsh-complete.zip
 helixsh-complete.tar.gz
 helixsh-complete.bundle
+
+# Demo scratch outputs created by scripts/demo.sh
+demo/work/

@@ -106,6 +106,13 @@ npm install
 npm run desktop:dev
 ```
 
+Or launch it preloaded with demo data:
+
+```bash
+nvm use
+./scripts/demo.sh
+```
+
 For the Tauri command shell:
 
 ```bash
