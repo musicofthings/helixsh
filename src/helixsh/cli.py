@@ -20,6 +20,7 @@ from helixsh.nextflow import (
     build_nextflow_run_command,
     format_shell_command,
     normalize_pipeline,
+    normalize_profiles,
     validate_input_file,
     validate_runtime,
 )
@@ -142,7 +143,9 @@ def make_parser() -> argparse.ArgumentParser:
 
     run_parser = subparsers.add_parser("run", help="Run an nf-core pipeline via Nextflow.")
     run_parser.add_argument("target", nargs="?", default="nf-core")
-    run_parser.add_argument("pipeline", nargs="?", default="rnaseq")
+    # Defaulted below rather than here, so a pipeline named in `target` as
+    # `nf-core/rnaseq` can be told apart from an unset positional.
+    run_parser.add_argument("pipeline", nargs="?", default=None)
     run_parser.add_argument("--org", default="nf-core")
     run_parser.add_argument("--runtime", default="docker")
     run_parser.add_argument("--input", dest="input_file")
@@ -151,6 +154,7 @@ def make_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--offline", action="store_true", help="Run Nextflow in offline mode (-offline flag).")
     run_parser.add_argument("--execute", action="store_true", help="Actually execute Nextflow.")
     run_parser.add_argument("--yes", action="store_true", help="Confirm execution in strict mode.")
+    run_parser.add_argument("--profile", action="append", default=[], dest="profiles", help="Extra Nextflow profile composed with the runtime, e.g. 'test' (repeatable or comma-separated).")
     run_parser.add_argument("--nf-arg", action="append", default=[], help="Extra argument passed directly to Nextflow (repeatable).")
     run_parser.add_argument("--schema", help="Schema JSON to validate before execution (requires --params).")
     run_parser.add_argument("--params", help="Parameter JSON to validate before execution (requires --schema).")
@@ -439,16 +443,46 @@ def make_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def resolve_run_target(target: str, pipeline: str | None) -> tuple[str, str]:
+    """Accept both `run nf-core rnaseq` and `run nf-core/rnaseq`.
+
+    The second is the form Nextflow itself takes and the form the docs and
+    nf-core website use, so it is what users type first. It previously failed
+    with an unrelated-sounding error about the target.
+    """
+    if "/" in target:
+        org, _, named = target.partition("/")
+        if pipeline is not None:
+            raise HelixshError(
+                f"Pass either '{target}' or a separate pipeline name, not both."
+            )
+        if not named:
+            raise HelixshError(f"Pipeline name missing after '{org}/'.")
+        return org, named
+    return target, pipeline if pipeline is not None else "rnaseq"
+
+
 def cmd_run(args: argparse.Namespace, strict: bool, role: str) -> int:
-    if args.target != "nf-core":
+    target, pipeline_name = resolve_run_target(args.target, args.pipeline)
+    if target != "nf-core":
         raise HelixshError("Only 'nf-core' target is currently supported in this phase.")
 
     runtime = validate_runtime(args.runtime)
+    # Nextflow refuses a repeated -profile flag, and the runtime already
+    # contributes one, so a profile smuggled through --nf-arg fails at launch
+    # with an opaque Nextflow error. Point at --profile instead.
+    for extra in args.nf_arg:
+        if extra == "-profile" or extra.startswith("-profile="):
+            raise HelixshError(
+                "Pass Nextflow profiles with --profile, not --nf-arg; "
+                "Nextflow accepts -profile only once."
+            )
+    profiles = normalize_profiles(getattr(args, "profiles", None))
     input_file = validate_input_file(args.input_file)
     config_file = validate_input_file(args.config)
     if runtime == "kubernetes" and not config_file:
         raise HelixshError("Kubernetes execution requires --config with an nf-k8s configuration.")
-    pipeline = normalize_pipeline(args.org, args.pipeline)
+    pipeline = normalize_pipeline(args.org, pipeline_name)
 
     cfg = RunConfig(
         pipeline=pipeline,
@@ -458,6 +492,7 @@ def cmd_run(args: argparse.Namespace, strict: bool, role: str) -> int:
         extra_args=tuple((["-offline"] if args.offline else []) + args.nf_arg),
         outdir=getattr(args, "outdir", None),
         config_file=config_file,
+        profiles=profiles,
     )
     command = build_nextflow_run_command(cfg)
     rendered = format_shell_command(command)
@@ -465,6 +500,7 @@ def cmd_run(args: argparse.Namespace, strict: bool, role: str) -> int:
     provenance_params = {
         "pipeline": pipeline,
         "runtime": runtime,
+        "profiles": list(profiles),
         "input_file": input_file,
         "resume": args.resume,
         "offline": args.offline,

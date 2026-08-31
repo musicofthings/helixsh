@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import re
 import shlex
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-# conda enables Nextflow -with-conda; kubernetes uses a validated nf-k8s config.
+# conda enables Nextflow -with-conda; kubernetes uses a validated nf-k8s
+# config; local runs the workflow with whatever is already on PATH, for
+# workstations and module-based HPC environments.
 SUPPORTED_RUNTIMES = {
     "docker",
     "podman",
@@ -15,7 +18,15 @@ SUPPORTED_RUNTIMES = {
     "apptainer",
     "conda",
     "kubernetes",
+    "local",
 }
+
+# Runtimes that are executors or environment switches rather than Nextflow
+# profiles, so they contribute no name to -profile.
+_NON_PROFILE_RUNTIMES = {"conda", "kubernetes", "local"}
+
+# Nextflow profile names are Groovy config block identifiers.
+PROFILE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class HelixshError(ValueError):
@@ -31,6 +42,9 @@ class RunConfig:
     extra_args: tuple[str, ...] = ()
     outdir: str | None = None
     config_file: str | None = None
+    # Additional Nextflow profiles composed with the runtime, e.g. ("test",)
+    # for an nf-core test run or an institutional profile.
+    profiles: tuple[str, ...] = ()
 
 
 def normalize_pipeline(org: str, pipeline: str) -> str:
@@ -52,6 +66,45 @@ def validate_runtime(runtime: str) -> str:
     return runtime
 
 
+def normalize_profiles(values: Iterable[str] | None) -> tuple[str, ...]:
+    """Split and validate requested profile names, preserving order.
+
+    Accepts repeated flags and comma-separated lists interchangeably, because
+    Nextflow itself only accepts the comma form and users copy both from
+    pipeline docs.
+    """
+    if not values:
+        return ()
+    names: list[str] = []
+    for value in values:
+        for name in str(value).split(","):
+            name = name.strip()
+            if not name:
+                continue
+            if not PROFILE_RE.match(name):
+                raise HelixshError(
+                    f"Invalid Nextflow profile name '{name}'. "
+                    "Profile names may contain letters, digits and underscores."
+                )
+            if name not in names:
+                names.append(name)
+    return tuple(names)
+
+
+def compose_profiles(config: RunConfig) -> list[str]:
+    """Return the ordered profile names for a single -profile argument.
+
+    Nextflow rejects a repeated -profile flag outright, so every profile has
+    to arrive as one comma-separated value. The runtime goes last because
+    later profiles win in Nextflow, and the container choice should override
+    whatever a pipeline profile such as nf-core's `test` sets.
+    """
+    names = [name for name in config.profiles]
+    if config.profile not in _NON_PROFILE_RUNTIMES and config.profile not in names:
+        names.append(config.profile)
+    return names
+
+
 def validate_input_file(input_file: str | None) -> str | None:
     if input_file is None:
         return None
@@ -67,11 +120,13 @@ def build_nextflow_run_command(config: RunConfig) -> list[str]:
         cmd.extend(["-c", config.config_file])
     cmd.extend(["run", config.pipeline])
 
-    # Conda and Kubernetes are executors, not nf-core profiles.
+    # Conda is an environment switch, not an nf-core profile; kubernetes and
+    # local contribute no profile name of their own.
     if config.profile == "conda":
         cmd.append("-with-conda")
-    elif config.profile != "kubernetes":
-        cmd.extend(["-profile", config.profile])
+    profiles = compose_profiles(config)
+    if profiles:
+        cmd.extend(["-profile", ",".join(profiles)])
     if config.input_file:
         cmd.extend(["--input", config.input_file])
     if config.outdir:

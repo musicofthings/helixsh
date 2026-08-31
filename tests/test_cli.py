@@ -114,3 +114,37 @@ def test_run_always_preflights_even_without_optional_inputs(tmp_path, capsys, mo
         assert payload["checks"]["runtime"]["runtime"] == "docker"
     finally:
         cli.AUDIT_FILE = old
+
+
+# ───────────────── run target parsing ─────────────────────────────────────────
+
+def test_slash_form_matches_the_documented_command(capsys):
+    """`helixsh run nf-core/rnaseq` is the form the README and nf-core use."""
+    assert cli.main(["run", "nf-core/rnaseq", "--runtime", "docker"]) == 0
+    assert "nextflow run nf-core/rnaseq -profile docker" in capsys.readouterr().out
+
+
+def test_slash_and_two_token_forms_agree(capsys):
+    cli.main(["run", "nf-core/sarek", "--runtime", "docker"])
+    slash = capsys.readouterr().out
+    cli.main(["run", "nf-core", "sarek", "--runtime", "docker"])
+    assert capsys.readouterr().out == slash
+
+
+def test_resolve_run_target_handles_each_form():
+    assert cli.resolve_run_target("nf-core", "sarek") == ("nf-core", "sarek")
+    assert cli.resolve_run_target("nf-core/sarek", None) == ("nf-core", "sarek")
+    # Unset positional keeps the historical default.
+    assert cli.resolve_run_target("nf-core", None) == ("nf-core", "rnaseq")
+    # A local workflow path is a pipeline, not an org/pipeline pair.
+    assert cli.resolve_run_target("nf-core", "/wf/main.nf") == ("nf-core", "/wf/main.nf")
+
+
+def test_naming_the_pipeline_twice_is_rejected(capsys):
+    assert cli.main(["run", "nf-core/rnaseq", "sarek"]) == 2
+    assert "not both" in capsys.readouterr().err
+
+
+def test_a_non_nf_core_org_is_still_refused(capsys):
+    assert cli.main(["run", "other/pipeline"]) == 2
+    assert "nf-core" in capsys.readouterr().err
