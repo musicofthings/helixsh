@@ -116,6 +116,7 @@ async function startRun() {
     notice.textContent =
       "The pipeline is running. It keeps running if you close Helixsh, and reappears here next time.";
     appendConsole(`\n[desktop] started run ${activeRunId}\n`);
+    byId("results").classList.add("hidden");
     refreshRuns();
   } catch (error) {
     setRunState("Start failed", "error");
@@ -203,6 +204,8 @@ window.helixsh.onJobEvent((event) => {
     byId("cancel").classList.add("hidden");
     byId("run").disabled = false;
     refreshRuns();
+    // The pipeline has stopped writing, so its outputs can now be read.
+    showResults({ runId: event.runId, status: "finished" });
   }
 });
 
@@ -292,8 +295,203 @@ async function openRun(run) {
         : `Run from ${describeWhen(opened.startedAt)}.`;
     byId("cancel").classList.toggle("hidden", opened.status !== "running");
     await refreshRuns();
+    await showResults(opened);
   } catch (error) {
     notice.textContent = error.message;
+  }
+}
+
+// ── results ───────────────────────────────────────────────────────────────
+
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes)) return "";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value >= 10 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
+}
+
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "—";
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ${Math.round(seconds % 60)}s`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+function group(title) {
+  const section = document.createElement("div");
+  section.className = "results-group";
+  const heading = document.createElement("h4");
+  heading.textContent = title;
+  section.append(heading);
+  return section;
+}
+
+function renderReports(reports, runId) {
+  const section = group("Reports");
+  const row = document.createElement("div");
+  row.className = "report-links";
+  for (const report of reports) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "report-link";
+    button.textContent = report.label;
+    button.title = report.path;
+    button.addEventListener("click", async () => {
+      try {
+        await window.helixsh.openResult(runId, report.path);
+      } catch (error) {
+        byId("results-note").textContent = error.message;
+      }
+    });
+    row.append(button);
+  }
+  section.append(row);
+  return section;
+}
+
+function renderProcesses(trace) {
+  const section = group("Resource use by process");
+  const table = document.createElement("table");
+  table.className = "process-table";
+  table.innerHTML =
+    "<thead><tr><th>Process</th><th>Tasks</th><th>Slowest</th><th>Peak memory</th></tr></thead>";
+  const body = document.createElement("tbody");
+  for (const item of trace.processes || []) {
+    const row = document.createElement("tr");
+    if (item.failed_count > 0) row.className = "has-failures";
+
+    const name = document.createElement("td");
+    name.textContent = item.process;
+    if (item.recommendation) {
+      const hint = document.createElement("span");
+      hint.className = "recommendation";
+      hint.textContent = item.recommendation;
+      name.append(hint);
+    }
+
+    const tasks = document.createElement("td");
+    tasks.className = "num";
+    tasks.textContent = item.failed_count
+      ? `${item.task_count} (${item.failed_count} failed)`
+      : String(item.task_count);
+
+    const slowest = document.createElement("td");
+    slowest.className = "num";
+    slowest.textContent = formatDuration(item.max_duration_s);
+
+    const memory = document.createElement("td");
+    memory.className = "num";
+    memory.textContent = item.max_peak_rss_mb
+      ? formatBytes(item.max_peak_rss_mb * 1024 * 1024)
+      : "—";
+
+    row.append(name, tasks, slowest, memory);
+    body.append(row);
+  }
+  table.append(body);
+  section.append(table);
+  return section;
+}
+
+function renderFailures(failures) {
+  const section = group(`Failed ${failures.length === 1 ? "process" : "processes"}`);
+  for (const failure of failures) {
+    const card = document.createElement("div");
+    card.className = "failure";
+
+    const title = document.createElement("h5");
+    title.textContent = failure.process || "Unknown process";
+    card.append(title);
+
+    const list = document.createElement("dl");
+    for (const [label, value] of [
+      ["Exit status", failure.exitStatus],
+      ["Work dir", failure.workDir],
+      ["Container", failure.container],
+    ]) {
+      if (!value) continue;
+      const term = document.createElement("dt");
+      term.textContent = label;
+      const detail = document.createElement("dd");
+      detail.textContent = value;
+      list.append(term, detail);
+    }
+    card.append(list);
+
+    if (failure.commandError) {
+      const pre = document.createElement("pre");
+      pre.textContent = failure.commandError;
+      card.append(pre);
+    }
+    section.append(card);
+  }
+  return section;
+}
+
+function renderOutputs(results) {
+  const section = group("Output files");
+  const list = document.createElement("ul");
+  list.className = "outputs";
+  for (const file of results.outputs.slice(0, 200)) {
+    const item = document.createElement("li");
+    const name = document.createElement("span");
+    name.textContent = file.relative;
+    const size = document.createElement("span");
+    size.className = "output-size";
+    size.textContent = formatBytes(file.size);
+    item.append(name, size);
+    list.append(item);
+  }
+  section.append(list);
+  return section;
+}
+
+async function showResults(run) {
+  const panel = byId("results");
+  const body = byId("results-body");
+  const note = byId("results-note");
+  body.replaceChildren();
+  note.textContent = "";
+
+  if (run.status === "running") {
+    // Outputs are still being written; showing a half-finished tree would
+    // read as a finished one.
+    panel.classList.add("hidden");
+    return;
+  }
+
+  let results;
+  try {
+    results = await window.helixsh.runResults(run.runId);
+  } catch (error) {
+    panel.classList.remove("hidden");
+    note.textContent = error.message;
+    return;
+  }
+  panel.classList.remove("hidden");
+
+  if (results.failures.length) body.append(renderFailures(results.failures));
+  if (results.reports.length) body.append(renderReports(results.reports, run.runId));
+  if (results.trace && (results.trace.processes || []).length) {
+    body.append(renderProcesses(results.trace));
+  }
+  if (results.outputs.length) body.append(renderOutputs(results));
+
+  if (!body.childElementCount) {
+    const empty = document.createElement("p");
+    empty.className = "results-empty";
+    empty.textContent = results.outdir
+      ? "No output files were found in this run's output directory."
+      : "This run recorded no output directory.";
+    body.append(empty);
+  } else if (results.truncated) {
+    note.textContent = "Output listing truncated.";
   }
 }
 
