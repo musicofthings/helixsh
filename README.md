@@ -55,7 +55,7 @@ CLI.
 | Category | Capabilities |
 |---|---|
 | **Desktop** | Focused Electron pipeline runner plus a Tauri/Svelte command shell |
-| **Execution** | Nextflow with Docker, Kubernetes, Podman, Singularity, Apptainer, Conda |
+| **Execution** | Nextflow with Docker, Kubernetes, Podman, Singularity, Apptainer, Conda, or local |
 | **Intent** | Natural-language → Nextflow plan (RNA-seq, WGS, WES, ChIP-seq, ATAC-seq, …) |
 | **Pipelines** | 20-pipeline bundled registry with version checks |
 | **Samplesheets** | Validate and auto-generate nf-core CSV samplesheets |
@@ -160,6 +160,12 @@ helixsh samplesheet-generate --fastq-dir /data/fastq --pipeline rnaseq --out sam
 
 # Run an nf-core pipeline (dry-run by default, add --execute to run for real)
 helixsh run nf-core/rnaseq --runtime docker --input samplesheet.csv --resume
+
+# Compose extra Nextflow profiles with the runtime (becomes -profile test,docker)
+helixsh run nf-core/rnaseq --runtime docker --profile test
+
+# Run a local workflow against tools already on PATH, with no container
+helixsh run nf-core ./main.nf --runtime local
 
 # Estimate cloud cost before submitting
 helixsh cost-estimate --cpu 32 --memory-gb 128 --hours 6 --provider aws
@@ -1143,8 +1149,24 @@ pytest tests/test_features.py -v
 pytest --tb=short -q
 ```
 
-The test suite covers the CLI and desktop boundary without requiring live
-pipeline execution.
+### Integration tests
+
+The default suite mocks `subprocess`, so it verifies the command Helixsh
+builds but never that a run succeeds. Two marked tiers execute Nextflow for
+real. Both are excluded from `pytest` by default. The local tier runs on every
+change in CI; the nf-core tier runs when a change touches the execution path,
+and on demand.
+
+```bash
+# Local workflow through the real execution path (needs nextflow + java, ~15s)
+pytest -m integration
+
+# A real nf-core pipeline under -profile test,docker (also needs Docker, minutes)
+pytest -m integration_nfcore
+```
+
+They skip with a message when the required tools are missing, so they are safe
+to run anywhere.
 
 ---
 

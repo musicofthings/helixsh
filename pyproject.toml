@@ -27,3 +27,12 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Real-execution tests need Nextflow (and Docker for the nf-core tier) and run
+# for minutes, so they stay out of the default suite. Select them explicitly:
+#   pytest -m integration
+#   pytest -m integration_nfcore
+addopts = "-m 'not integration and not integration_nfcore'"
+markers = [
+  "integration: executes real Nextflow against a local workflow",
+  "integration_nfcore: executes a real nf-core pipeline; needs Docker",
+]
