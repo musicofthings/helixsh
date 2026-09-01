@@ -18,12 +18,19 @@ SUPPORTED_RUNTIMES = {
     "apptainer",
     "conda",
     "kubernetes",
+    "awsbatch",
+    "googlebatch",
     "local",
 }
 
 # Runtimes that are executors or environment switches rather than Nextflow
 # profiles, so they contribute no name to -profile.
-_NON_PROFILE_RUNTIMES = {"conda", "kubernetes", "local"}
+_NON_PROFILE_RUNTIMES = {"conda", "kubernetes", "awsbatch", "googlebatch", "local"}
+
+# Executors that cannot be configured from the command line alone: they need a
+# generated config naming the queue or project and an object-storage work
+# directory, and running without one fails at submission rather than here.
+CONFIG_REQUIRED_RUNTIMES = {"kubernetes", "awsbatch", "googlebatch"}
 
 # Nextflow profile names are Groovy config block identifiers.
 PROFILE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
