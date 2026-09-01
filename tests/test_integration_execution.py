@@ -54,17 +54,19 @@ def _require_docker_daemon() -> None:
 
 @pytest.fixture
 def nextflow_env(tmp_path, monkeypatch):
-    """Run Nextflow fully inside tmp_path.
+    """Give each test its own working directory.
 
-    Nextflow writes its work directory relative to the process working
-    directory and caches plugins under NXF_HOME, so without this a test run
-    would litter the repository and share state between tests.
+    Nextflow puts `work/` and `.nextflow.log` beside the process working
+    directory, so this is what keeps runs from colliding and from littering
+    the repository.
+
+    NXF_HOME is deliberately left alone. It is the framework and plugin
+    cache, not run state: pointing it at a per-test directory made every
+    test re-download the ~100MB Nextflow distribution, which is slow and
+    turns any network blip into a failure.
     """
     _require("nextflow")
     _require("java")
-    home = tmp_path / "nxf-home"
-    home.mkdir()
-    monkeypatch.setenv("NXF_HOME", str(home))
     # The launcher otherwise reaches out to check for a newer release on every
     # invocation, which is slow and fails closed in sandboxed CI.
     monkeypatch.setenv("NXF_DISABLE_CHECK_LATEST", "true")
