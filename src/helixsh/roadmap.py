@@ -27,6 +27,12 @@ def compute_roadmap_status() -> list[PhaseStatus]:
                 "Sandboxed Electron desktop planner and runner",
                 "Docker daemon and Kubernetes cluster readiness checks",
                 "Validated nf-k8s shared-storage configuration generation",
+                "Runs that survive the desktop app closing, and are picked up again",
+                "Post-run results, reports and per-process resource summary",
+                "Samplesheet generation and validation from a directory of FASTQ files",
+                "Validated AWS Batch and Google Batch executor configuration",
+                "Cloud executors in the desktop app, with credential sources reported",
+                "Real-execution integration tiers and a GUI eval battery in CI",
             ),
             pending=(
                 "Interactive POSIX shell and intent-first command interception",
@@ -79,6 +85,8 @@ def compute_roadmap_status() -> list[PhaseStatus]:
                 "Full command, parameter, and container-digest provenance",
                 "Strict-mode confirmation for every mutating operation",
                 "Clinical validation and compliance hardening",
+                # Blocked on an Apple Developer identity and a Mac to build and
+                # verify on, rather than on anything in this repository.
                 "Signed and notarized universal macOS app with bundled Python/Nextflow",
                 "Apple App Sandbox entitlement and production update channel",
             ),

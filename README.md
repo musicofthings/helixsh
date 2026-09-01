@@ -1195,13 +1195,20 @@ to run anywhere.
 ---
 
 
-## Project Health (as of 2026-07-28)
+## Project Health (as of 2026-09-01)
 
-- Python test suite: **203 passed** (`python3 -m pytest -q`).
-- Electron boundary suite: **7 passed** (`npm run desktop:test`).
-- Tauri/Svelte production build: **pass** (`npm --prefix ui run build`).
+- Python test suite: **311 passed** (`python3 -m pytest -q`).
+- Electron boundary suite: **49 passed** (`npm run desktop:test`).
+- Real-execution integration tier: **4 passed** (`pytest -m integration`).
+- Desktop GUI eval batteries: **59 checks passed** across the four scripts in
+  `.claude/skills/run-desktop/`, driving the running app rather than mocking it
+  — 28 plan and guardrail checks, 9 on run survival, 10 on results, 12 on the
+  FASTQ-to-run path.
 - Bytecode compile check: **pass** (`python -m compileall -q src`).
-- Electron and Tauri dependency audits: **0 vulnerabilities**.
+- Electron dependency audit: **0 vulnerabilities** (`npm audit`).
+- Tauri/Svelte production build: **not re-verified** — `ui/` dependencies are
+  not installed in the environment this was last checked from. CI is the
+  authority for it.
 
 ## Packaging
 
