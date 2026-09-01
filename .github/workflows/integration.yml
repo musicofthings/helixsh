@@ -34,6 +34,12 @@ jobs:
     # nf-core/demo pulls containers and runs FastQC, seqtk and MultiQC; it is
     # minutes, not seconds.
     timeout-minutes: 45
+    env:
+      # Pin the runner. `get.nextflow.io` installs whatever is newest, which
+      # makes this suite a canary for Nextflow releases rather than a check on
+      # this repository -- 26.04.6 tightened the config parser and rejected an
+      # nf-core pipeline that had been fine for years. Bump deliberately.
+      NXF_VER: "25.04.6"
     steps:
       - uses: actions/checkout@v4
 
@@ -77,4 +83,5 @@ jobs:
             /tmp/pytest-*/**/.nextflow.log
             /tmp/pytest-*/**/*.log
           if-no-files-found: ignore
+          include-hidden-files: true
           retention-days: 7
