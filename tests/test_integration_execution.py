@@ -23,7 +23,6 @@ import pytest
 
 from helixsh import cli
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = Path(__file__).parent / "fixtures"
 WORKFLOW = FIXTURES / "count_seqs.nf"
 
@@ -164,30 +163,21 @@ def test_executes_a_real_nf_core_pipeline(nextflow_env):
     _require_docker_daemon()
     outdir = nextflow_env / "nf-core-results"
 
-    # Keep the work directory out of pytest's private tmp tree. Task scripts
-    # there are bind-mounted into containers and failed to execute with
-    # `.command.run: Permission denied` (exit 126); pytest's base directory is
-    # mode 0700, which a container user cannot traverse. A directory beside the
-    # checkout is what every nf-core CI run uses.
-    work = REPO_ROOT / ".nfcore-work"
-    work.mkdir(mode=0o755, exist_ok=True)
-    try:
-        exit_code = cli.main(
-            [
-                "run", "nf-core", "demo",
-                "--runtime", "docker",
-                "--profile", "test",
-                "--outdir", str(outdir),
-                "--nf-arg=-r", "--nf-arg=1.0.1",
-                "--nf-arg=-w", f"--nf-arg={work}",
-                "--execute",
-            ]
-        )
+    # Pin the pipeline. 1.0.1 sets `process.shell` as a multi-line string,
+    # which Nextflow resolves to 'bash\n\nset -e ...' and then cannot launch,
+    # failing every task with `.command.run: Permission denied` (exit 126).
+    # 1.2.0 uses the list form and declares nextflowVersion '!>=25.10.4',
+    # which is what NXF_VER pins in CI.
+    exit_code = cli.main(
+        [
+            "run", "nf-core", "demo",
+            "--runtime", "docker",
+            "--profile", "test",
+            "--outdir", str(outdir),
+            "--nf-arg=-r", "--nf-arg=1.2.0",
+            "--execute",
+        ]
+    )
 
-        assert exit_code == 0
-        assert list(outdir.rglob("multiqc_report.html")), "no MultiQC report produced"
-    finally:
-        # Container outputs can be owned by another uid, so ignore what we
-        # cannot remove rather than masking the test result with a cleanup
-        # error.
-        shutil.rmtree(work, ignore_errors=True)
+    assert exit_code == 0
+    assert list(outdir.rglob("multiqc_report.html")), "no MultiQC report produced"
