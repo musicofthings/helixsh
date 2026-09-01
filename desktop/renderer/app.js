@@ -5,7 +5,8 @@ const consoleElement = byId("console");
 const runState = byId("run-state");
 const notice = byId("notice");
 const MAX_CONSOLE_CHARS = 1_000_000;
-let activeJobId = "";
+let activeRunId = "";
+let viewedRunId = "";
 let plannedFingerprint = "";
 
 function appendConsole(text, stream = "stdout") {
@@ -107,12 +108,15 @@ async function startRun() {
       notice.textContent = "Execution cancelled. The reviewed plan was not started.";
       return;
     }
-    activeJobId = result.jobId;
+    activeRunId = result.runId;
+    viewedRunId = result.runId;
     byId("cancel").classList.remove("hidden");
     byId("run").disabled = true;
     setRunState("Running", "active");
-    notice.textContent = "The pipeline is running through the Helixsh POSIX execution boundary.";
-    appendConsole(`\n[desktop] started job ${activeJobId}\n`);
+    notice.textContent =
+      "The pipeline is running. It keeps running if you close Helixsh, and reappears here next time.";
+    appendConsole(`\n[desktop] started run ${activeRunId}\n`);
+    refreshRuns();
   } catch (error) {
     setRunState("Start failed", "error");
     notice.textContent = error.message;
@@ -168,25 +172,37 @@ byId("run-form").addEventListener("submit", (event) => {
 byId("run").addEventListener("click", startRun);
 byId("generate-k8s").addEventListener("click", generateKubernetesConfig);
 byId("cancel").addEventListener("click", async () => {
-  if (!activeJobId) return;
-  await window.helixsh.cancel(activeJobId);
+  if (!viewedRunId) return;
+  await window.helixsh.cancel(viewedRunId);
   notice.textContent = "Cancellation requested. Nextflow may take a moment to stop.";
+  refreshRuns();
 });
 
+byId("refresh-runs").addEventListener("click", refreshRuns);
+
 window.helixsh.onJobEvent((event) => {
-  if (event.jobId !== activeJobId) return;
+  if (event.runId !== viewedRunId) return;
   if (event.type === "output") appendConsole(event.text, event.stream);
   if (event.type === "error") appendConsole(`${event.message}\n`, "stderr");
   if (event.type === "exit") {
+    // A run adopted after a restart reports no exit code: nobody was its
+    // parent to collect one, so say that rather than invent a number.
+    const unknown = event.code === null || event.code === undefined;
     const succeeded = event.code === 0;
-    setRunState(succeeded ? "Completed" : "Stopped", succeeded ? "ok" : "error");
-    notice.textContent = succeeded
-      ? "Pipeline completed successfully."
-      : `Pipeline exited with code ${event.code}${event.signal ? ` (${event.signal})` : ""}.`;
-    appendConsole(`\n[desktop] job exited with code ${event.code}\n`);
-    activeJobId = "";
+    setRunState(
+      unknown ? "Ended" : succeeded ? "Completed" : "Stopped",
+      unknown ? "error" : succeeded ? "ok" : "error",
+    );
+    notice.textContent = unknown
+      ? "The run ended while Helixsh was not attached, so its exit status is unknown. The log above is complete."
+      : succeeded
+        ? "Pipeline completed successfully."
+        : `Pipeline exited with code ${event.code}${event.signal ? ` (${event.signal})` : ""}.`;
+    appendConsole(`\n[desktop] run ended${unknown ? "" : ` with code ${event.code}`}\n`);
+    if (event.runId === activeRunId) activeRunId = "";
     byId("cancel").classList.add("hidden");
     byId("run").disabled = false;
+    refreshRuns();
   }
 });
 
@@ -196,4 +212,90 @@ document.querySelectorAll("input, select").forEach((element) => {
   });
 });
 
+const RUN_STATE_CLASS = {
+  running: "active",
+  completed: "ok",
+  failed: "error",
+  cancelled: "error",
+  interrupted: "error",
+};
+
+function describeWhen(iso) {
+  const started = new Date(iso);
+  if (Number.isNaN(started.getTime())) return "";
+  return started.toLocaleString(undefined, {
+    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+}
+
+async function refreshRuns() {
+  const list = byId("runs");
+  let runs = [];
+  try {
+    runs = await window.helixsh.runs();
+  } catch (error) {
+    appendConsole(`${error.message}\n`, "stderr");
+    return;
+  }
+  list.replaceChildren();
+  if (!runs.length) {
+    const empty = document.createElement("li");
+    empty.className = "runs-empty";
+    empty.textContent = "No runs yet.";
+    list.append(empty);
+    return;
+  }
+  for (const run of runs.slice(0, 25)) {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "run-item";
+    if (run.runId === viewedRunId) button.setAttribute("aria-current", "true");
+    button.dataset.runId = run.runId;
+
+    const pipeline = document.createElement("span");
+    pipeline.className = "run-pipeline";
+    pipeline.textContent = run.pipeline || "pipeline";
+
+    const status = document.createElement("span");
+    status.className = `run-status ${run.status}`;
+    status.textContent = run.status;
+
+    const when = document.createElement("span");
+    when.className = "run-when";
+    when.textContent = describeWhen(run.startedAt);
+
+    button.append(pipeline, status, when);
+    button.addEventListener("click", () => openRun(run));
+    item.append(button);
+    list.append(item);
+  }
+}
+
+async function openRun(run) {
+  try {
+    if (viewedRunId && viewedRunId !== run.runId) {
+      await window.helixsh.closeRun(viewedRunId);
+    }
+    viewedRunId = run.runId;
+    consoleElement.textContent = "";
+    const opened = await window.helixsh.openRun(run.runId);
+    appendConsole(`[desktop] ${opened.command}\n\n`);
+    if (opened.log) appendConsole(opened.log);
+    setRunState(
+      opened.status === "running" ? "Running" : opened.status,
+      RUN_STATE_CLASS[opened.status] || "idle",
+    );
+    notice.textContent =
+      opened.status === "running"
+        ? "Following a run that is still going."
+        : `Run from ${describeWhen(opened.startedAt)}.`;
+    byId("cancel").classList.toggle("hidden", opened.status !== "running");
+    await refreshRuns();
+  } catch (error) {
+    notice.textContent = error.message;
+  }
+}
+
 loadCapabilities();
+refreshRuns();

@@ -381,3 +381,90 @@ summary {
     min-height: 32rem;
   }
 }
+
+/* ── run history ─────────────────────────────────────────────────────────── */
+
+.history {
+  margin-top: 1rem;
+  border-top: 1px solid rgba(120, 200, 170, 0.16);
+  padding-top: 0.85rem;
+}
+
+.history-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  color: #5fd6a8;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.link-button:hover { color: #8ce8c4; }
+
+.runs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.runs-empty {
+  font-size: 0.82rem;
+  color: rgba(226, 240, 235, 0.45);
+  padding: 0.35rem 0;
+}
+
+.run-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+  font-size: 0.82rem;
+  color: #e2f0eb;
+  text-align: left;
+  cursor: pointer;
+}
+
+.run-item:hover { background: rgba(120, 200, 170, 0.08); }
+.run-item[aria-current="true"] { border-color: rgba(120, 200, 170, 0.45); }
+
+.run-item .run-pipeline { font-weight: 600; }
+.run-item .run-when {
+  margin-left: auto;
+  color: rgba(226, 240, 235, 0.45);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.run-status {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.run-status.running     { background: rgba(95, 214, 168, 0.18); color: #7fe3bb; }
+.run-status.completed   { background: rgba(95, 214, 168, 0.12); color: #5fd6a8; }
+.run-status.failed      { background: rgba(226, 121, 106, 0.16); color: #e2796a; }
+.run-status.cancelled   { background: rgba(226, 240, 235, 0.10); color: rgba(226, 240, 235, 0.6); }
+.run-status.interrupted { background: rgba(224, 165, 74, 0.16); color: #e0a54a; }

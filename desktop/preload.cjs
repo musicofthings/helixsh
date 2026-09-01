@@ -9,7 +9,10 @@ contextBridge.exposeInMainWorld(
     selectPath: (kind) => ipcRenderer.invoke("helixsh:select-path", kind),
     plan: (request) => ipcRenderer.invoke("helixsh:plan", request),
     start: (request) => ipcRenderer.invoke("helixsh:start", request),
-    cancel: (jobId) => ipcRenderer.invoke("helixsh:cancel", jobId),
+    cancel: (runId) => ipcRenderer.invoke("helixsh:cancel", runId),
+    runs: () => ipcRenderer.invoke("helixsh:runs"),
+    openRun: (runId) => ipcRenderer.invoke("helixsh:open-run", runId),
+    closeRun: (runId) => ipcRenderer.invoke("helixsh:close-run", runId),
     generateKubernetesConfig: (request) =>
       ipcRenderer.invoke("helixsh:generate-k8s-config", request),
     onJobEvent: (callback) => {
