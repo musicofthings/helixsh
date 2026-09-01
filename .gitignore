@@ -21,3 +21,6 @@ demo/work/
 
 # Machine-local Claude Code settings
 .claude/settings.local.json
+
+# Nextflow work directory for the nf-core integration test
+.nfcore-work/
