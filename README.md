@@ -1153,7 +1153,9 @@ pytest --tb=short -q
 
 The default suite mocks `subprocess`, so it verifies the command Helixsh
 builds but never that a run succeeds. Two marked tiers execute Nextflow for
-real. Both are excluded from `pytest` by default and run nightly in CI.
+real. Both are excluded from `pytest` by default. The local tier runs on every
+change in CI; the nf-core tier runs when a change touches the execution path,
+and on demand.
 
 ```bash
 # Local workflow through the real execution path (needs nextflow + java, ~15s)

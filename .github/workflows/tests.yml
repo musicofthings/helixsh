@@ -32,6 +32,41 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
+  integration:
+    name: Real Nextflow execution
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Nextflow
+        run: |
+          curl -fsSL https://get.nextflow.io | bash
+          sudo mv nextflow /usr/local/bin/
+          nextflow -version
+
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Install helixsh
+        run: python -m pip install .
+
+      # Needs no container runtime and finishes in seconds, so it belongs in
+      # the suite every change runs rather than on a schedule nobody watches.
+      - name: Execute a real workflow through the Helixsh execution path
+        run: python -m pytest -m integration -v
+
   desktop:
     runs-on: ubuntu-24.04
     env:
