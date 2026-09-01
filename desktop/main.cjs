@@ -15,6 +15,8 @@ const { spawn } = require("node:child_process");
 const {
   buildKubernetesConfigArgs,
   buildRunArgs,
+  buildSamplesheetGenerateArgs,
+  buildSamplesheetValidateArgs,
   requiredCapabilities,
   validateKubernetesRequest,
   validateRunRequest,
@@ -167,6 +169,14 @@ function withinRunOutput(run, candidate) {
   const root = path.resolve(outdir);
   const target = path.resolve(candidate);
   return target === root || target.startsWith(root + path.sep);
+}
+
+function safeJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 function sendJobEvent(payload) {
@@ -462,6 +472,57 @@ function registerIpc() {
     const { text, offset } = readRunTail(run.runId);
     followRun(run.runId, offset);
     return { ...run, log: text };
+  });
+
+  ipcMain.handle("helixsh:pipelines", async (event) => {
+    assertTrustedSender(event);
+    const result = await runBackend(["pipeline-list"], { timeoutMs: 30_000 });
+    if (result.code !== 0) throw new Error(result.stderr || "Could not list pipelines");
+    return JSON.parse(result.stdout);
+  });
+
+  ipcMain.handle("helixsh:build-samplesheet", async (event, payload) => {
+    assertTrustedSender(event);
+    // Changing the input invalidates any reviewed plan.
+    approvedPlan = null;
+    const directory = path.join(app.getPath("userData"), "samplesheets");
+    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+    const pipeline = String(payload?.pipeline || "");
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const out = path.join(directory, `${pipeline || "samplesheet"}-${stamp}.csv`);
+
+    const args = buildSamplesheetGenerateArgs({ ...payload, out });
+    const generated = await runBackend(args, { timeoutMs: 60_000 });
+    if (generated.code !== 0) {
+      throw new Error(generated.stderr.trim() || "Could not build a samplesheet");
+    }
+    // The app produced this file, so it is a path the app can vouch for on the
+    // way into execution -- the same approval a native picker would give.
+    rememberAndReturn(out, "samplesheet");
+
+    const validated = await runBackend(
+      buildSamplesheetValidateArgs({ file: out, pipeline }),
+      { timeoutMs: 30_000 },
+    );
+    return {
+      path: out,
+      summary: safeJson(generated.stdout),
+      validation: safeJson(validated.stdout),
+    };
+  });
+
+  ipcMain.handle("helixsh:validate-samplesheet", async (event, payload) => {
+    assertTrustedSender(event);
+    const file = String(payload?.file || "");
+    // Only a sheet the user chose or the app generated may be inspected.
+    if (!selectedPaths.get(path.resolve(file))?.has("samplesheet")) {
+      throw new Error("samplesheet was not selected through Helixsh");
+    }
+    const result = await runBackend(
+      buildSamplesheetValidateArgs({ file, pipeline: payload?.pipeline }),
+      { timeoutMs: 30_000 },
+    );
+    return safeJson(result.stdout);
   });
 
   ipcMain.handle("helixsh:run-results", async (event, runId) => {
