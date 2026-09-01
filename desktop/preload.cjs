@@ -13,6 +13,9 @@ contextBridge.exposeInMainWorld(
     runs: () => ipcRenderer.invoke("helixsh:runs"),
     openRun: (runId) => ipcRenderer.invoke("helixsh:open-run", runId),
     closeRun: (runId) => ipcRenderer.invoke("helixsh:close-run", runId),
+    runResults: (runId) => ipcRenderer.invoke("helixsh:run-results", runId),
+    openResult: (runId, filePath) =>
+      ipcRenderer.invoke("helixsh:open-result", { runId, path: filePath }),
     generateKubernetesConfig: (request) =>
       ipcRenderer.invoke("helixsh:generate-k8s-config", request),
     onJobEvent: (callback) => {

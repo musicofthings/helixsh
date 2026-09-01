@@ -6,6 +6,7 @@ const {
   dialog,
   ipcMain,
   session,
+  shell,
 } = require("electron");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -19,6 +20,7 @@ const {
   validateRunRequest,
 } = require("./lib/helixsh.cjs");
 const { STATUS, createRunStore, isProcessAlive } = require("./lib/runstore.cjs");
+const { collectResults } = require("./lib/results.cjs");
 
 const MAX_CAPTURE_BYTES = 2 * 1024 * 1024;
 // `doctor` probes an unreachable cluster and a stalled Docker socket, each
@@ -139,6 +141,32 @@ function runBackend(args, { timeoutMs = 20_000 } = {}) {
       resolve({ code: code ?? 2, signal: signal || "", stdout, stderr });
     });
   });
+}
+
+async function traceSummary(traceFile) {
+  // Reuse the CLI rather than reimplementing trace parsing in JavaScript: it
+  // is already tested, and a second parser would drift from the first.
+  const result = await runBackend(["trace-summary", "--file", traceFile], { timeoutMs: 30_000 });
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Is this path one of the run's own outputs?
+ *
+ * The renderer asks to open files by path, so the path has to be checked
+ * rather than trusted: only somewhere inside the output directory the user
+ * chose for this run may be opened.
+ */
+function withinRunOutput(run, candidate) {
+  const outdir = run?.request?.outputPath;
+  if (!outdir) return false;
+  const root = path.resolve(outdir);
+  const target = path.resolve(candidate);
+  return target === root || target.startsWith(root + path.sep);
 }
 
 function sendJobEvent(payload) {
@@ -434,6 +462,41 @@ function registerIpc() {
     const { text, offset } = readRunTail(run.runId);
     followRun(run.runId, offset);
     return { ...run, log: text };
+  });
+
+  ipcMain.handle("helixsh:run-results", async (event, runId) => {
+    assertTrustedSender(event);
+    const run = store().read(String(runId));
+    if (!run) throw new Error("Unknown run");
+    let logText = "";
+    try {
+      logText = fs.readFileSync(store().logPath(run.runId), "utf8");
+    } catch {
+      logText = "";
+    }
+    const results = collectResults({ outdir: run.request?.outputPath || "", logText });
+    return {
+      ...results,
+      // Only meaningful once a run has stopped producing.
+      trace: results.trace ? await traceSummary(results.trace) : null,
+      traceFile: results.trace,
+    };
+  });
+
+  ipcMain.handle("helixsh:open-result", async (event, payload) => {
+    assertTrustedSender(event);
+    const run = store().read(String(payload?.runId));
+    if (!run) throw new Error("Unknown run");
+    const target = String(payload?.path || "");
+    if (!withinRunOutput(run, target)) {
+      throw new Error("Only files inside this run's output directory can be opened");
+    }
+    // Hand off to the desktop rather than rendering a pipeline's HTML inside
+    // the app: a report is untrusted output and the window is deliberately
+    // locked down.
+    const problem = await shell.openPath(target);
+    if (problem) throw new Error(problem);
+    return { opened: true };
   });
 
   ipcMain.handle("helixsh:close-run", async (event, runId) => {
