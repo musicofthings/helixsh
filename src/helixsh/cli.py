@@ -14,7 +14,14 @@ from helixsh.doctor import collect_doctor_results
 from helixsh.kubernetes import KubernetesConfig, write_kubernetes_config
 from helixsh.intent import intent_to_nf_args, parse_intent
 from helixsh.mcp import evaluate_capability
+from helixsh.cloud_batch import (
+    AwsBatchConfig,
+    GoogleBatchConfig,
+    write_aws_batch_config,
+    write_google_batch_config,
+)
 from helixsh.nextflow import (
+    CONFIG_REQUIRED_RUNTIMES,
     HelixshError,
     RunConfig,
     build_nextflow_run_command,
@@ -294,6 +301,26 @@ def make_parser() -> argparse.ArgumentParser:
     k8s_parser.add_argument("--storage-mount-path", default="/workspace")
     k8s_parser.add_argument("--out", required=True)
 
+    aws_parser = subparsers.add_parser(
+        "aws-batch-config",
+        help="Generate a constrained AWS Batch Nextflow config.",
+    )
+    aws_parser.add_argument("--region", required=True)
+    aws_parser.add_argument("--job-queue", required=True)
+    aws_parser.add_argument("--bucket", required=True, help="S3 bucket for the work directory.")
+    aws_parser.add_argument("--prefix", default="", help="Key prefix inside the bucket.")
+    aws_parser.add_argument("--out", required=True)
+
+    gcp_parser = subparsers.add_parser(
+        "google-batch-config",
+        help="Generate a constrained Google Batch Nextflow config.",
+    )
+    gcp_parser.add_argument("--project", required=True)
+    gcp_parser.add_argument("--location", required=True)
+    gcp_parser.add_argument("--bucket", required=True, help="Cloud Storage bucket for the work directory.")
+    gcp_parser.add_argument("--prefix", default="", help="Object prefix inside the bucket.")
+    gcp_parser.add_argument("--out", required=True)
+
     # ── Execution lifecycle ────────────────────────────────────────────────────
     exec_start = subparsers.add_parser("execution-start", help="Record execution start in provenance DB.")
     exec_start.add_argument("--command", dest="run_command", required=True)
@@ -480,8 +507,10 @@ def cmd_run(args: argparse.Namespace, strict: bool, role: str) -> int:
     profiles = normalize_profiles(getattr(args, "profiles", None))
     input_file = validate_input_file(args.input_file)
     config_file = validate_input_file(args.config)
-    if runtime == "kubernetes" and not config_file:
-        raise HelixshError("Kubernetes execution requires --config with an nf-k8s configuration.")
+    if runtime in CONFIG_REQUIRED_RUNTIMES and not config_file:
+        raise HelixshError(
+            f"{runtime} execution requires --config with a generated executor configuration."
+        )
     pipeline = normalize_pipeline(args.org, pipeline_name)
 
     cfg = RunConfig(
@@ -574,6 +603,24 @@ def cmd_k8s_config(
             storage_claim=storage_claim,
             storage_mount_path=storage_mount_path,
         ),
+    )
+    print(json.dumps({"ok": True, "path": str(destination)}, indent=2))
+    return 0
+
+
+def cmd_aws_batch_config(region: str, job_queue: str, bucket: str, prefix: str, out: str) -> int:
+    destination = write_aws_batch_config(
+        out,
+        AwsBatchConfig(region=region, job_queue=job_queue, bucket=bucket, prefix=prefix),
+    )
+    print(json.dumps({"ok": True, "path": str(destination)}, indent=2))
+    return 0
+
+
+def cmd_google_batch_config(project: str, location: str, bucket: str, prefix: str, out: str) -> int:
+    destination = write_google_batch_config(
+        out,
+        GoogleBatchConfig(project=project, location=location, bucket=bucket, prefix=prefix),
     )
     print(json.dumps({"ok": True, "path": str(destination)}, indent=2))
     return 0
@@ -1365,6 +1412,14 @@ def main(argv: list[str] | None = None) -> int:
                 args.storage_claim,
                 args.storage_mount_path,
                 args.out,
+            )
+        if args.command == "aws-batch-config":
+            return cmd_aws_batch_config(
+                args.region, args.job_queue, args.bucket, args.prefix, args.out
+            )
+        if args.command == "google-batch-config":
+            return cmd_google_batch_config(
+                args.project, args.location, args.bucket, args.prefix, args.out
             )
         if args.command == "execution-start":
             return cmd_execution_start(

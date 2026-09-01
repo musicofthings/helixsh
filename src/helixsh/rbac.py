@@ -40,6 +40,9 @@ _ANALYST_EXTRA = {
     "tower-submit",
     "snakemake-import",
     "k8s-config",
+    # Cloud executor configuration is the same kind of act as k8s-config:
+    # it names where work runs, and carries no credential.
+    "aws-batch-config", "google-batch-config",
 }
 
 # Admin-only additions (e.g. installing system-wide packages)

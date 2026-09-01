@@ -55,7 +55,7 @@ CLI.
 | Category | Capabilities |
 |---|---|
 | **Desktop** | Focused Electron pipeline runner plus a Tauri/Svelte command shell |
-| **Execution** | Nextflow with Docker, Kubernetes, Podman, Singularity, Apptainer, Conda, or local |
+| **Execution** | Nextflow with Docker, Kubernetes, AWS Batch, Google Batch, Podman, Singularity, Apptainer, Conda, or local |
 | **Intent** | Natural-language → Nextflow plan (RNA-seq, WGS, WES, ChIP-seq, ATAC-seq, …) |
 | **Pipelines** | 20-pipeline bundled registry with version checks |
 | **Samplesheets** | Validate and auto-generate nf-core CSV samplesheets |
@@ -166,6 +166,15 @@ helixsh run nf-core/rnaseq --runtime docker --profile test
 
 # Run a local workflow against tools already on PATH, with no container
 helixsh run nf-core ./main.nf --runtime local
+
+# Burst to the cloud: generate an executor config, then run against it
+helixsh aws-batch-config --region eu-west-1 --job-queue genomics-spot \
+    --bucket my-lab-nf --out aws.config
+helixsh run nf-core/rnaseq --runtime awsbatch --config aws.config
+
+helixsh google-batch-config --project my-lab-project --location us-central1 \
+    --bucket my-lab-nf --out gcp.config
+helixsh run nf-core/rnaseq --runtime googlebatch --config gcp.config
 
 # Estimate cloud cost before submitting
 helixsh cost-estimate --cpu 32 --memory-gb 128 --hours 6 --provider aws
