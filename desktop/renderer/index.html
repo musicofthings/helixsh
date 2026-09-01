@@ -38,7 +38,7 @@
         <form id="run-form">
           <div class="field-grid">
             <label>
-              <span>nf-core pipeline</span>
+              <span>nf-core pipeline <button id="browse-pipelines" type="button" class="link-button">Browse</button></span>
               <input id="pipeline" name="pipeline" value="rnaseq" list="pipelines" required />
               <datalist id="pipelines">
                 <option value="rnaseq"></option>
@@ -71,7 +71,9 @@
               <div class="file-control">
                 <input id="inputPath" readonly placeholder="Optional CSV" />
                 <button type="button" data-picker="samplesheet" data-target="inputPath">Choose</button>
+                <button id="build-samplesheet" type="button" title="Build one from a directory of FASTQ files">Build</button>
               </div>
+              <div id="samplesheet-state" class="sheet-state"></div>
             </div>
             <div class="file-field">
               <span>Output directory</span>
@@ -162,6 +164,16 @@
           </div>
         </form>
       </section>
+
+      <div id="pipeline-browser" class="browser hidden" role="dialog" aria-modal="true" aria-label="Choose a pipeline">
+        <div class="browser-panel">
+          <div class="browser-heading">
+            <h3>nf-core pipelines</h3>
+            <button id="close-browser" type="button" class="link-button">Close</button>
+          </div>
+          <ul id="pipeline-list" class="pipeline-list"></ul>
+        </div>
+      </div>
 
       <section class="panel activity">
         <div class="section-heading">

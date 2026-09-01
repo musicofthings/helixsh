@@ -150,6 +150,8 @@ document.querySelectorAll("[data-picker]").forEach((button) => {
     if (result) {
       byId(button.dataset.target).value = result;
       plannedFingerprint = "";
+      // Say whether the sheet is usable now, rather than at plan time.
+      if (button.dataset.target === "inputPath") validateChosenSamplesheet();
     }
   });
 });
@@ -180,6 +182,20 @@ byId("cancel").addEventListener("click", async () => {
 });
 
 byId("refresh-runs").addEventListener("click", refreshRuns);
+byId("build-samplesheet").addEventListener("click", buildSamplesheet);
+byId("browse-pipelines").addEventListener("click", openPipelineBrowser);
+byId("close-browser").addEventListener("click", () => {
+  byId("pipeline-browser").classList.add("hidden");
+});
+byId("pipeline-browser").addEventListener("click", (event) => {
+  // Clicking the backdrop dismisses, clicking the panel does not.
+  if (event.target === byId("pipeline-browser")) {
+    byId("pipeline-browser").classList.add("hidden");
+  }
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") byId("pipeline-browser").classList.add("hidden");
+});
 
 window.helixsh.onJobEvent((event) => {
   if (event.runId !== viewedRunId) return;
@@ -298,6 +314,132 @@ async function openRun(run) {
     await showResults(opened);
   } catch (error) {
     notice.textContent = error.message;
+  }
+}
+
+// ── samplesheet ───────────────────────────────────────────────────────────
+
+function showSheetState(text, kind, issues = []) {
+  const element = byId("samplesheet-state");
+  element.className = `sheet-state ${kind}`;
+  element.replaceChildren();
+  if (!text) return;
+  element.append(document.createTextNode(text));
+  if (!issues.length) return;
+  const list = document.createElement("ul");
+  list.className = "sheet-issues";
+  for (const issue of issues.slice(0, 12)) {
+    const item = document.createElement("li");
+    const where = document.createElement("span");
+    where.className = "issue-where";
+    // Row 0 is the header, which is where a missing column is reported.
+    where.textContent = issue.row > 0 ? `row ${issue.row}` : "header";
+    item.append(where, document.createTextNode(issue.message));
+    list.append(item);
+  }
+  element.append(list);
+}
+
+function reportValidation(validation, prefix, { countInPrefix = false } = {}) {
+  if (!validation) {
+    showSheetState(`${prefix} — could not be validated.`, "problem");
+    return;
+  }
+  if (validation.ok) {
+    // Do not say the sample count twice when the prefix already carries it.
+    const detail = countInPrefix ? "no problems" : `${validation.row_count} samples, no problems`;
+    showSheetState(`${prefix} — ${detail}.`, "ok");
+  } else {
+    showSheetState(`${prefix} — not usable yet:`, "problem", validation.issues || []);
+  }
+}
+
+async function buildSamplesheet() {
+  const pipeline = byId("pipeline").value;
+  const fastqDir = await window.helixsh.selectPath("directory");
+  if (!fastqDir) return;
+  showSheetState("Building a samplesheet from that directory…", "busy");
+  try {
+    const result = await window.helixsh.buildSamplesheet({ fastqDir, pipeline });
+    byId("inputPath").value = result.path;
+    plannedFingerprint = "";
+    const rows = result.summary?.rows ?? 0;
+    if (rows === 0) {
+      showSheetState("No FASTQ files were found in that directory.", "problem");
+      return;
+    }
+    reportValidation(result.validation, `Built ${rows} samples`, { countInPrefix: true });
+  } catch (error) {
+    showSheetState(error.message, "problem");
+  }
+}
+
+async function validateChosenSamplesheet() {
+  const file = byId("inputPath").value;
+  if (!file) {
+    showSheetState("", "");
+    return;
+  }
+  try {
+    const validation = await window.helixsh.validateSamplesheet({
+      file,
+      pipeline: byId("pipeline").value,
+    });
+    reportValidation(validation, "Samplesheet");
+  } catch (error) {
+    showSheetState(error.message, "problem");
+  }
+}
+
+// ── pipeline browser ──────────────────────────────────────────────────────
+
+async function openPipelineBrowser() {
+  const dialog = byId("pipeline-browser");
+  const list = byId("pipeline-list");
+  list.replaceChildren();
+  dialog.classList.remove("hidden");
+
+  let pipelines = [];
+  try {
+    pipelines = await window.helixsh.pipelines();
+  } catch (error) {
+    const failed = document.createElement("li");
+    failed.textContent = error.message;
+    list.append(failed);
+    return;
+  }
+
+  for (const pipeline of pipelines) {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "pipeline-item";
+    button.dataset.pipeline = pipeline.name;
+
+    const name = document.createElement("span");
+    name.className = "pipeline-name";
+    name.textContent = pipeline.name;
+
+    const version = document.createElement("span");
+    version.className = "pipeline-version";
+    version.textContent = pipeline.latest || "";
+
+    const description = document.createElement("span");
+    description.className = "pipeline-description";
+    description.textContent = pipeline.description || "";
+
+    button.append(name, version, description);
+    button.addEventListener("click", () => {
+      byId("pipeline").value = pipeline.name;
+      // Pin the revision the registry reports, so a run is reproducible
+      // instead of tracking whatever the pipeline's default branch becomes.
+      if (pipeline.latest) byId("revision").value = pipeline.latest;
+      plannedFingerprint = "";
+      dialog.classList.add("hidden");
+      validateChosenSamplesheet();
+    });
+    item.append(button);
+    list.append(item);
   }
 }
 

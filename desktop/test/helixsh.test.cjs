@@ -5,6 +5,8 @@ const test = require("node:test");
 const {
   buildKubernetesConfigArgs,
   buildRunArgs,
+  buildSamplesheetGenerateArgs,
+  buildSamplesheetValidateArgs,
   normalizePipeline,
   requiredCapabilities,
   validateKubernetesRequest,
@@ -149,4 +151,69 @@ test("still threads the config through a Kubernetes run", () => {
     "--config",
     "/cfg/nf-k8s.config",
   ]);
+});
+
+test("builds a samplesheet generation command from a FASTQ directory", () => {
+  const args = buildSamplesheetGenerateArgs({
+    fastqDir: "/data/fastq",
+    pipeline: "rnaseq",
+    out: "/app/sheets/generated.csv",
+  });
+  assert.deepEqual(args, [
+    "samplesheet-generate",
+    "--fastq-dir",
+    "/data/fastq",
+    "--pipeline",
+    "rnaseq",
+    "--out",
+    "/app/sheets/generated.csv",
+  ]);
+});
+
+test("passes strandedness through only when it is one nf-core accepts", () => {
+  const args = buildSamplesheetGenerateArgs({
+    fastqDir: "/data/fastq",
+    pipeline: "rnaseq",
+    out: "/out.csv",
+    strandedness: "reverse",
+  });
+  assert.deepEqual(args.slice(-2), ["--strandedness", "reverse"]);
+
+  assert.throws(
+    () => buildSamplesheetGenerateArgs({
+      fastqDir: "/d", pipeline: "rnaseq", out: "/o.csv", strandedness: "sideways",
+    }),
+    /unsupported strandedness/,
+  );
+});
+
+test("a samplesheet cannot be generated without somewhere to read or write", () => {
+  assert.throws(
+    () => buildSamplesheetGenerateArgs({ pipeline: "rnaseq", out: "/o.csv" }),
+    /FASTQ directory is required/,
+  );
+  assert.throws(
+    () => buildSamplesheetGenerateArgs({ fastqDir: "/d", pipeline: "rnaseq" }),
+    /output path is required/,
+  );
+});
+
+test("samplesheet generation refuses a pipeline name it would not run", () => {
+  assert.throws(
+    () => buildSamplesheetGenerateArgs({
+      fastqDir: "/d", out: "/o.csv", pipeline: "../../etc/passwd",
+    }),
+    /nf-core pipeline name/,
+  );
+});
+
+test("builds a samplesheet validation command", () => {
+  assert.deepEqual(
+    buildSamplesheetValidateArgs({ file: "/data/sheet.csv", pipeline: "nf-core/sarek" }),
+    ["samplesheet-validate", "--file", "/data/sheet.csv", "--pipeline", "sarek"],
+  );
+  assert.throws(
+    () => buildSamplesheetValidateArgs({ pipeline: "rnaseq" }),
+    /samplesheet path is required/,
+  );
 });

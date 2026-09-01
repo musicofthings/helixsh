@@ -184,7 +184,22 @@ h3 {
 
 .field-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
 }
+
+/* A label carrying an action must not grow taller than its siblings, or the
+   inputs in the row stop lining up. */
+.field-grid label > span {
+  display: flex;
+  align-items: baseline;
+  /* Keep the action beside its own label rather than pushed to the column
+     edge, where it reads as belonging to the next field. */
+  justify-content: flex-start;
+  gap: 0.5rem;
+  min-height: 1.35rem;
+}
+
+.field-grid label > span .link-button { font-size: 0.75rem; }
 
 .file-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -615,4 +630,105 @@ summary {
 .results-empty {
   font-size: 0.8rem;
   color: rgba(226, 240, 235, 0.45);
+}
+
+/* ── samplesheet state ───────────────────────────────────────────────────── */
+
+.sheet-state { margin-top: 0.4rem; font-size: 0.78rem; }
+.sheet-state:empty { display: none; }
+.sheet-state.ok { color: #5fd6a8; }
+.sheet-state.problem { color: #e2796a; }
+.sheet-state.busy { color: rgba(226, 240, 235, 0.55); }
+
+.sheet-issues {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.sheet-issues li { color: #e2796a; }
+
+.sheet-issues .issue-where {
+  color: rgba(226, 240, 235, 0.45);
+  margin-right: 0.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── pipeline browser ────────────────────────────────────────────────────── */
+
+.browser {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 10, 9, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  z-index: 20;
+}
+
+.browser.hidden { display: none; }
+
+.browser-panel {
+  background: #0d1a16;
+  border: 1px solid rgba(120, 200, 170, 0.25);
+  border-radius: 10px;
+  width: min(34rem, 100%);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  padding: 1.1rem 1.2rem;
+}
+
+.browser-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.7rem;
+}
+
+.browser-heading h3 { margin: 0; font-size: 1rem; }
+
+.pipeline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pipeline-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  color: #e2f0eb;
+  cursor: pointer;
+}
+
+.pipeline-item:hover { background: rgba(120, 200, 170, 0.09); }
+
+.pipeline-item .pipeline-name { font-weight: 600; font-size: 0.9rem; }
+
+.pipeline-item .pipeline-version {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  color: #5fd6a8;
+  font-variant-numeric: tabular-nums;
+}
+
+.pipeline-item .pipeline-description {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  color: rgba(226, 240, 235, 0.55);
 }

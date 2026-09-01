@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld(
     openRun: (runId) => ipcRenderer.invoke("helixsh:open-run", runId),
     closeRun: (runId) => ipcRenderer.invoke("helixsh:close-run", runId),
     runResults: (runId) => ipcRenderer.invoke("helixsh:run-results", runId),
+    pipelines: () => ipcRenderer.invoke("helixsh:pipelines"),
+    buildSamplesheet: (request) => ipcRenderer.invoke("helixsh:build-samplesheet", request),
+    validateSamplesheet: (request) => ipcRenderer.invoke("helixsh:validate-samplesheet", request),
     openResult: (runId, filePath) =>
       ipcRenderer.invoke("helixsh:open-result", { runId, path: filePath }),
     generateKubernetesConfig: (request) =>

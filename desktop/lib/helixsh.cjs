@@ -185,6 +185,65 @@ function buildKubernetesConfigArgs(payload, outputPath) {
   ];
 }
 
+// nf-core's rnaseq samplesheet takes one of these; anything else is a typo.
+const STRANDEDNESS = new Set(["auto", "forward", "reverse", "unstranded"]);
+
+/**
+ * Build a samplesheet from a directory of FASTQ files.
+ *
+ * The generated sheet is written somewhere the app controls rather than into
+ * the user's data directory: writing next to someone's sequencing run is
+ * presumptuous, and a path the app produced is one it can also approve for
+ * execution.
+ */
+function buildSamplesheetGenerateArgs(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new TypeError("samplesheet request must be an object");
+  }
+  const fastqDir = optionalPath(payload.fastqDir, "fastqDir");
+  if (!fastqDir) {
+    throw new TypeError("a FASTQ directory is required");
+  }
+  const out = optionalPath(payload.out, "out");
+  if (!out) {
+    throw new TypeError("an output path is required");
+  }
+  const args = [
+    "samplesheet-generate",
+    "--fastq-dir",
+    fastqDir,
+    "--pipeline",
+    normalizePipeline(payload.pipeline),
+    "--out",
+    out,
+  ];
+  const strandedness = String(payload.strandedness || "").trim();
+  if (strandedness) {
+    if (!STRANDEDNESS.has(strandedness)) {
+      throw new TypeError(`unsupported strandedness: ${strandedness}`);
+    }
+    args.push("--strandedness", strandedness);
+  }
+  return args;
+}
+
+function buildSamplesheetValidateArgs(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new TypeError("validation request must be an object");
+  }
+  const file = optionalPath(payload.file, "file");
+  if (!file) {
+    throw new TypeError("a samplesheet path is required");
+  }
+  return [
+    "samplesheet-validate",
+    "--file",
+    file,
+    "--pipeline",
+    normalizePipeline(payload.pipeline),
+  ];
+}
+
 function requiredCapabilities(runtime) {
   const normalized = String(runtime || "").trim().toLowerCase();
   if (!RUNTIMES.has(normalized)) {
@@ -195,8 +254,11 @@ function requiredCapabilities(runtime) {
 
 module.exports = {
   RUNTIMES,
+  STRANDEDNESS,
   buildKubernetesConfigArgs,
   buildRunArgs,
+  buildSamplesheetGenerateArgs,
+  buildSamplesheetValidateArgs,
   normalizePipeline,
   requiredCapabilities,
   validateKubernetesRequest,
