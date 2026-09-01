@@ -71,6 +71,18 @@ async function pick(kind, target, p) {
     [target, p], { timeout: 10_000 });
 }
 
+async function generateConfig(runtime) {
+  await click(`#generate-${runtime}`);
+  // Wait for a settled label rather than for "Generating…" to go away: when
+  // the panel starts at "Not generated" that condition is already true, and
+  // the check reads the state before generation has finished.
+  await page.waitForFunction(
+    (r) => ['Config ready', 'Generation failed']
+      .includes(document.getElementById(`${r}-config-state`).innerText),
+    runtime, { timeout: 30_000 });
+  return txt(`#${runtime}-config-state`);
+}
+
 async function plan() {
   await click('#plan');
   await page.waitForFunction(
@@ -139,12 +151,10 @@ record('ui/kubernetes panel reveals on target change',
   await page.evaluate(() => !document.getElementById('kubernetes-panel').classList.contains('hidden')),
   'panel visible');
 await setVal('storageClaim', 'nextflow-pvc');
-await click('#generate-k8s');
-await page.waitForFunction(
-  () => document.getElementById('k8s-config-state').innerText !== 'Generating…', { timeout: 30_000 });
+const k8sState = await generateConfig('kubernetes');
 const cfgPath = await page.evaluate(() => document.getElementById('configPath').value);
-record('demo/sarek k8s config generated',
-  (await txt('#k8s-config-state')) === 'Config ready' && !!cfgPath, cfgPath || 'none');
+record('demo/sarek k8s config generated', k8sState === 'Config ready' && !!cfgPath,
+  cfgPath || 'none');
 r = await plan();
 record('demo/sarek k8s plan', r.out.includes('nf-core/sarek') && r.state === 'Plan ready',
   r.out.match(/planned: (.*)/)?.[1] ?? r.state);
@@ -154,11 +164,9 @@ await ss('02-sarek-k8s');
 
 // ---- Guardrail: injection payload in a Kubernetes name ----------------------
 await setVal('storageClaim', "pvc'; System.exit(1); //");
-await click('#generate-k8s');
-await page.waitForFunction(
-  () => document.getElementById('k8s-config-state').innerText !== 'Generating…', { timeout: 30_000 });
 record('guard/k8s config rejects injection payload',
-  (await txt('#k8s-config-state')) === 'Generation failed', await txt('#k8s-config-state'));
+  (await generateConfig('kubernetes')) === 'Generation failed',
+  await txt('#kubernetes-config-state'));
 
 // ---- Regression: the k8s config must not follow a non-k8s run --------------
 // A config generated for Kubernetes pins process.executor = 'k8s'; carrying it
@@ -192,7 +200,102 @@ record('demo/scrnaseq plan honours the resume toggle',
   r.out.includes('nf-core/scrnaseq') && !r.out.match(/planned:.*-resume/),
   r.out.match(/planned: (.*)/)?.[1] ?? r.state);
 
+// ---- Demo: burst to AWS Batch ----------------------------------------------
+// Nothing is submitted. What matters here is that the app can compose a cloud
+// run, that the generated config is the only thing pinning the executor, and
+// that it carries no secret.
+await setVal('pipeline', 'rnaseq');
+await setVal('revision', '3.18.0');
+await pick('directory', 'outputPath', path.join(WORK, 'rnaseq-results'));
+await setVal('runtime', 'awsbatch');
+await new Promise((res) => setTimeout(res, 300));
+record('ui/aws batch panel reveals on target change',
+  await page.evaluate(() => !document.getElementById('awsbatch-panel').classList.contains('hidden')),
+  'panel visible');
+record('ui/credentials are reported before anything is submitted',
+  (await txt('#awsbatch-credentials')).startsWith('Credentials'),
+  await txt('#awsbatch-credentials') || 'nothing reported');
+
+r = await plan();
+record('guard/aws batch refuses to plan without a generated config',
+  r.state !== 'Plan ready' && /require a generated executor config/.test(r.notice + r.out),
+  (r.notice || '').split('\n')[0] || r.state);
+
+await setVal('awsRegion', 'eu-west-1');
+await setVal('awsJobQueue', 'genomics-spot');
+await setVal('awsBucket', 'my-lab-nf');
+await setVal('awsPrefix', 'runs/2026');
+const awsState = await generateConfig('awsbatch');
+const awsCfg = await page.evaluate(() => document.getElementById('configPath').value);
+record('demo/aws batch config generated', awsState === 'Config ready' && !!awsCfg,
+  awsCfg || 'none');
+
+const awsText = awsCfg ? fs.readFileSync(awsCfg, 'utf8') : '';
+record('demo/aws work directory is on S3',
+  awsText.includes("workDir = 's3://my-lab-nf/runs/2026/work'"),
+  awsText.match(/workDir = .*/)?.[0] ?? 'no workDir');
+record('demo/aws config carries no credential',
+  !awsText.split('\n').some((line) =>
+    !line.trim().startsWith('//') && line.includes('=') &&
+    /accesskey|secretkey|password|token|api_?key/i.test(line)),
+  'no credential-shaped assignment');
+
+// Editing a setting must not leave the config built from the old ones
+// attached, still labelled ready.
+await setVal('awsJobQueue', 'genomics-ondemand');
+record('guard/editing a setting drops the config generated from the old ones',
+  !(await page.evaluate(() => document.getElementById('configPath').value)) &&
+    (await txt('#awsbatch-config-state')) === 'Not generated',
+  await txt('#awsbatch-config-state'));
+await generateConfig('awsbatch');
+
+r = await plan();
+record('demo/aws batch plan',
+  r.out.includes('nf-core/rnaseq') && r.state === 'Plan ready',
+  r.out.match(/planned: (.*)/)?.[1] ?? r.state);
+record('demo/aws batch contributes no container profile',
+  !/planned:.*-profile/.test(r.out), r.out.match(/planned: (.*)/)?.[1] ?? 'no plan');
+await ss('04-aws-batch');
+
+// ---- Regression: a config must not survive a change of executor -------------
+// Each generated config pins process.executor. An AWS Batch config left
+// attached to a Google Batch run would submit to AWS under the wrong heading,
+// which is the same failure the Kubernetes leak was.
+await setVal('runtime', 'googlebatch');
+await new Promise((res) => setTimeout(res, 300));
+record('regression/changing executor drops the previous config',
+  !(await page.evaluate(() => document.getElementById('configPath').value)),
+  'configPath cleared');
+
+await setVal('gcpProject', 'my-lab-project');
+await setVal('gcpLocation', 'us-central1');
+await setVal('gcpBucket', 'my-lab-nf');
+const gcpState = await generateConfig('googlebatch');
+const gcpCfg = await page.evaluate(() => document.getElementById('configPath').value);
+record('demo/google batch config generated', gcpState === 'Config ready' && !!gcpCfg,
+  gcpCfg || 'none');
+record('demo/google work directory is on Cloud Storage',
+  !!gcpCfg && fs.readFileSync(gcpCfg, 'utf8').includes("workDir = 'gs://my-lab-nf/work'"),
+  gcpCfg ? (fs.readFileSync(gcpCfg, 'utf8').match(/workDir = .*/)?.[0] ?? 'no workDir') : 'no config');
+r = await plan();
+record('demo/google batch plan',
+  r.out.includes('nf-core/rnaseq') && r.state === 'Plan ready',
+  r.out.match(/planned: (.*)/)?.[1] ?? r.state);
+await ss('05-google-batch');
+
+// ---- Guardrail: injection payload in a cloud name ---------------------------
+await setVal('runtime', 'awsbatch');
+await new Promise((res) => setTimeout(res, 300));
+await setVal('awsRegion', 'eu-west-1');
+await setVal('awsBucket', 'my-lab-nf');
+await setVal('awsJobQueue', "q'; System.exit(1); //");
+record('guard/aws config rejects injection payload',
+  (await generateConfig('awsbatch')) === 'Generation failed' &&
+    !(await page.evaluate(() => document.getElementById('configPath').value)),
+  await txt('#awsbatch-config-state'));
+
 // ---- Guardrail: path traversal in the pipeline name -------------------------
+await setVal('runtime', 'docker');
 await setVal('pipeline', '../../etc/passwd');
 r = await plan();
 record('guard/path traversal in pipeline name refused', r.state !== 'Plan ready', r.state);

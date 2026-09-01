@@ -198,7 +198,7 @@ Helixsh includes two complementary desktop surfaces:
 
 | App | Best for | Location |
 |---|---|---|
-| **Focused runner** | Configure, validate, and run an nf-core pipeline with Docker or Kubernetes | `desktop/` |
+| **Focused runner** | Configure, validate, and run an nf-core pipeline locally, on Kubernetes, or on AWS Batch and Google Batch | `desktop/` |
 | **Command shell** | Explore the complete Helixsh command set with streaming command blocks | `ui/` |
 
 ### Focused nf-core runner
@@ -211,11 +211,22 @@ plan plus a native confirmation before execution.
 It provides:
 
 - nf-core pipeline and revision selection
-- Docker, Kubernetes, Podman, Apptainer, and Singularity targets
+- Docker, Podman, Apptainer, Singularity, Kubernetes, AWS Batch, and Google
+  Batch targets
 - Docker-daemon and Kubernetes-cluster readiness checks
-- generated, validated `nf-k8s` 1.5.5 configuration
+- generated, validated `nf-k8s` 1.5.5, AWS Batch, and Google Batch
+  configuration
 - live output and full process-group cancellation
 - deterministic argument arrays and the Helixsh POSIX execution boundary
+
+Each executor's settings are validated against the provider's own naming rules
+before anything is written, and the generated config is pinned to the executor
+that produced it: switching target drops it, and the main process refuses a
+config that belongs to a different one. Nothing secret is written — Nextflow
+reads AWS credentials from the environment, an instance profile or a named
+profile, and Google credentials from application default credentials. The panel
+says which of those it found before you submit, since a run that fails on
+credentials otherwise fails minutes later at the provider.
 
 Build the current machine's macOS application bundle:
 
@@ -299,7 +310,11 @@ helixsh doctor
 
 Checks: `nextflow`, `java`, Docker daemon, `kubectl`, Kubernetes cluster,
 `podman`, `singularity`, `apptainer`, `conda`, `mamba`, `micromamba`, and
-`git`.
+`git`, plus where AWS and Google credentials would come from — established by
+inspecting environment variables and file locations only, so no credential is
+read, printed, or sent anywhere. Credentials issued by an instance profile or
+the GCE metadata server leave no local trace, so those report `unknown` rather
+than claiming they are absent.
 
 #### `plan`
 

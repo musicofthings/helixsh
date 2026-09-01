@@ -13,11 +13,16 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const {
+  RUNTIME_LABELS,
+  buildAwsBatchConfigArgs,
+  buildGoogleBatchConfigArgs,
   buildKubernetesConfigArgs,
   buildRunArgs,
   buildSamplesheetGenerateArgs,
   buildSamplesheetValidateArgs,
   requiredCapabilities,
+  validateAwsBatchRequest,
+  validateGoogleBatchRequest,
   validateKubernetesRequest,
   validateRunRequest,
 } = require("./lib/helixsh.cjs");
@@ -94,7 +99,11 @@ function assertApprovedPaths(request) {
     workflowPath: "workflow",
     schemaPath: "schema",
     paramsPath: "params",
-    configPath: "config",
+    // An executor config is approved for one runtime only. Nothing in the path
+    // says which executor the file pins, so the approval carries it: a config
+    // generated for Kubernetes cannot be attached to an AWS Batch run, and a
+    // stale one cannot silently redirect a local run at a cluster.
+    configPath: `config:${request.runtime}`,
     cacheRoot: "directory",
   };
   for (const [field, kind] of Object.entries(expectedKinds)) {
@@ -377,6 +386,35 @@ async function assertRuntimeReady(runtime) {
   }
 }
 
+/**
+ * Write an executor config and vouch for it, for one runtime only.
+ *
+ * Naming the file after a digest of its settings means the same cluster or
+ * queue reuses one file instead of accumulating a directory of near-identical
+ * ones. The approval recorded against it carries the runtime, because the path
+ * does not say which executor the file pins.
+ */
+async function generateExecutorConfig(event, { runtime, folder, basename, request, buildArgs }) {
+  assertTrustedSender(event);
+  // The executor the run will use has just changed, so any reviewed plan is
+  // no longer the plan.
+  approvedPlan = null;
+  const digest = crypto
+    .createHash("sha256")
+    .update(JSON.stringify(request))
+    .digest("hex")
+    .slice(0, 12);
+  const configDirectory = path.join(app.getPath("userData"), folder);
+  fs.mkdirSync(configDirectory, { recursive: true, mode: 0o700 });
+  const destination = path.join(configDirectory, `${basename}-${digest}.config`);
+  const result = await runBackend(buildArgs(request, destination));
+  if (result.code !== 0) {
+    throw new Error(result.stderr || `${RUNTIME_LABELS[runtime]} config generation failed`);
+  }
+  rememberAndReturn(destination, `config:${runtime}`);
+  return { path: destination };
+}
+
 function registerIpc() {
   ipcMain.handle("helixsh:capabilities", async (event) => {
     assertTrustedSender(event);
@@ -393,7 +431,9 @@ function registerIpc() {
       workflow: { properties: ["openFile"], filters: [{ name: "Nextflow", extensions: ["nf"] }] },
       schema: { properties: ["openFile"], filters: [{ name: "JSON", extensions: ["json"] }] },
       params: { properties: ["openFile"], filters: [{ name: "JSON", extensions: ["json"] }] },
-      config: { properties: ["openFile"], filters: [{ name: "Nextflow config", extensions: ["config"] }] },
+      // No entry for an executor config: it pins `process.executor`, and a
+      // file chosen from disk does not say which executor that is. Helixsh
+      // only accepts one it generated and can attribute to a runtime.
       directory: { properties: ["openDirectory", "createDirectory"] },
     };
     const options = definitions[kind];
@@ -568,23 +608,35 @@ function registerIpc() {
     return { closed: true };
   });
 
-  ipcMain.handle("helixsh:generate-k8s-config", async (event, payload) => {
-    assertTrustedSender(event);
-    approvedPlan = null;
-    const request = validateKubernetesRequest(payload);
-    const digest = crypto
-      .createHash("sha256")
-      .update(JSON.stringify(request))
-      .digest("hex")
-      .slice(0, 12);
-    const configDirectory = path.join(app.getPath("userData"), "kubernetes");
-    fs.mkdirSync(configDirectory, { recursive: true, mode: 0o700 });
-    const destination = path.join(configDirectory, `nf-k8s-${digest}.config`);
-    const result = await runBackend(buildKubernetesConfigArgs(request, destination));
-    if (result.code !== 0) throw new Error(result.stderr || "Kubernetes config generation failed");
-    rememberAndReturn(destination, "config");
-    return { path: destination };
-  });
+  ipcMain.handle("helixsh:generate-k8s-config", async (event, payload) =>
+    generateExecutorConfig(event, {
+      runtime: "kubernetes",
+      folder: "kubernetes",
+      basename: "nf-k8s",
+      request: validateKubernetesRequest(payload),
+      buildArgs: buildKubernetesConfigArgs,
+    }),
+  );
+
+  ipcMain.handle("helixsh:generate-aws-config", async (event, payload) =>
+    generateExecutorConfig(event, {
+      runtime: "awsbatch",
+      folder: "aws-batch",
+      basename: "aws-batch",
+      request: validateAwsBatchRequest(payload),
+      buildArgs: buildAwsBatchConfigArgs,
+    }),
+  );
+
+  ipcMain.handle("helixsh:generate-google-config", async (event, payload) =>
+    generateExecutorConfig(event, {
+      runtime: "googlebatch",
+      folder: "google-batch",
+      basename: "google-batch",
+      request: validateGoogleBatchRequest(payload),
+      buildArgs: buildGoogleBatchConfigArgs,
+    }),
+  );
 }
 
 function createWindow() {

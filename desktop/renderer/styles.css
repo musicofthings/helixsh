@@ -306,15 +306,26 @@ button:disabled {
   margin-bottom: 0.85rem;
 }
 
-#k8s-config-state {
+.config-state {
   color: var(--muted);
   font-size: 0.72rem;
 }
 
-.k8s-grid {
+.executor-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-bottom: 0.75rem;
 }
+
+/* Where a cloud run will get its credentials. Advisory, not a gate: a host
+   inside the provider is issued credentials with no local configuration. */
+.credentials-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.credentials-note:empty { display: none; }
+.credentials-note.ok { color: #5fd6a8; }
+.credentials-note.problem { color: #e2796a; }
 
 details {
   margin-top: 1rem;

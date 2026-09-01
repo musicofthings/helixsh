@@ -21,6 +21,10 @@ contextBridge.exposeInMainWorld(
       ipcRenderer.invoke("helixsh:open-result", { runId, path: filePath }),
     generateKubernetesConfig: (request) =>
       ipcRenderer.invoke("helixsh:generate-k8s-config", request),
+    generateAwsBatchConfig: (request) =>
+      ipcRenderer.invoke("helixsh:generate-aws-config", request),
+    generateGoogleBatchConfig: (request) =>
+      ipcRenderer.invoke("helixsh:generate-google-config", request),
     onJobEvent: (callback) => {
       if (typeof callback !== "function") throw new TypeError("callback must be a function");
       const listener = (_event, payload) => callback(payload);

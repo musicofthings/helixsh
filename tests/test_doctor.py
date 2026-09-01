@@ -57,5 +57,20 @@ def test_collect_doctor_results_runs_checks_in_parallel(monkeypatch):
     elapsed = time.monotonic() - start
 
     assert elapsed < 3
-    assert [result.name for result in results] == ["slow0", "slow1", "slow2", "slow3"]
-    assert all(result.state == "timeout" for result in results)
+    commands = [result for result in results if result.name.startswith("slow")]
+    assert [result.name for result in commands] == ["slow0", "slow1", "slow2", "slow3"]
+    assert all(result.state == "timeout" for result in commands)
+
+
+def test_the_answer_includes_where_a_cloud_run_would_get_its_credentials(monkeypatch):
+    """A cloud submission that fails on credentials fails minutes after Run.
+
+    Reporting it alongside the runtimes is what lets the desktop app say so
+    before anything is submitted.
+    """
+    monkeypatch.setattr(doctor, "CHECKS", ())
+
+    names = [result.name for result in collect_doctor_results()]
+
+    assert "aws-credentials" in names
+    assert "google-credentials" in names

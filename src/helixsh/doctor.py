@@ -76,10 +76,21 @@ def run_check(name: str, command: list[str]) -> CheckResult:
 
 
 def collect_doctor_results() -> list[CheckResult]:
+    """Every check, including the cloud ones that run no command at all.
+
+    Credential discovery is pure inspection of environment variables and file
+    locations, so it is appended rather than run through the pool: there is
+    nothing to time out and nothing to wait on.
+    """
     # The checks are independent and each can block for CHECK_TIMEOUT_SECONDS
     # (`kubectl cluster-info` against an unreachable cluster, a stalled Docker
     # socket). Run serially, the worst case was the sum of every timeout, which
     # overran the desktop app's IPC budget on a machine with no cluster. In
     # parallel it is bounded by the slowest single check.
+    # Imported here rather than at module scope: cloud_credentials reuses
+    # CheckResult from this module, so a top-level import would be a cycle.
+    from helixsh.cloud_credentials import collect_cloud_credentials
+
     with ThreadPoolExecutor(max_workers=max(1, len(CHECKS))) as pool:
-        return list(pool.map(lambda check: run_check(*check), CHECKS))
+        results = list(pool.map(lambda check: run_check(*check), CHECKS))
+    return results + collect_cloud_credentials()
