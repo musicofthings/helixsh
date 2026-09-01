@@ -1,5 +1,6 @@
 import json
 import re
+from pathlib import Path
 
 import pytest
 
@@ -212,3 +213,43 @@ def test_a_cloud_run_threads_the_config_through(tmp_path, capsys):
     # An executor is not a container profile, so it contributes no -profile.
     assert str(config) in planned[0]
     assert "-profile" not in planned[0]
+
+
+def test_the_naming_rules_match_the_ones_the_desktop_app_enforces():
+    """The desktop app validates before calling this, so the rules exist twice.
+
+    It does that so a typo is a message beside the field rather than a
+    subprocess exit code. The cost is two hand-written copies of the same
+    provider rules, so both read one corpus: a change to either side that the
+    other does not follow fails here instead of at submission time.
+    """
+    corpus = json.loads(
+        (Path(__file__).parent / "fixtures" / "cloud_names.json").read_text(encoding="utf-8")
+    )
+    under = {
+        "region": lambda value: validate_aws_batch_settings(
+            AwsBatchConfig(region=value, job_queue="q", bucket="a-bucket")
+        ),
+        "jobQueue": lambda value: validate_aws_batch_settings(
+            AwsBatchConfig(region="eu-west-1", job_queue=value, bucket="a-bucket")
+        ),
+        "bucket": lambda value: validate_aws_batch_settings(
+            AwsBatchConfig(region="eu-west-1", job_queue="q", bucket=value)
+        ),
+        "prefix": lambda value: validate_aws_batch_settings(
+            AwsBatchConfig(region="eu-west-1", job_queue="q", bucket="a-bucket", prefix=value)
+        ),
+        "project": lambda value: validate_google_batch_settings(
+            GoogleBatchConfig(project=value, location="us-central1", bucket="a-bucket")
+        ),
+        "location": lambda value: validate_google_batch_settings(
+            GoogleBatchConfig(project="my-lab-project", location=value, bucket="a-bucket")
+        ),
+    }
+
+    for field, check in under.items():
+        for value in corpus[field]["valid"]:
+            check(value)  # must not raise
+        for value in corpus[field]["invalid"]:
+            with pytest.raises(ValueError):
+                check(value)

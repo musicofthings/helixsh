@@ -1,0 +1,36 @@
+{
+  "_comment": [
+    "Provider naming rules, shared by the Python validators in",
+    "helixsh.cloud_batch and the JavaScript ones in desktop/lib/helixsh.cjs.",
+    "The desktop app validates before calling the backend so a typo is a",
+    "message next to the field rather than a subprocess exit code, which means",
+    "the same rules are written twice. Both suites read this file, so the two",
+    "implementations cannot drift apart without a test failing.",
+    "Length limits are checked in each suite separately; this file is about",
+    "shape."
+  ],
+  "region": {
+    "valid": ["us-east-1", "eu-west-2", "ap-southeast-1", "us-gov-west-1"],
+    "invalid": ["", "eu_west_1", "EU-WEST-1", "eu-west", "eu-west-1a", "'; rm -rf /", "eu-west-1\nx"]
+  },
+  "jobQueue": {
+    "valid": ["genomics-spot", "q", "Queue_1", "a-b_c"],
+    "invalid": ["", "my queue", "queue'; x", "-leading", "queue\nname"]
+  },
+  "project": {
+    "valid": ["my-lab-project", "abcdef", "a1234z"],
+    "invalid": ["", "Sh", "UPPER-CASE", "1starts-with-digit", "p'; x"]
+  },
+  "location": {
+    "valid": ["us-central1", "europe-west4", "asia-northeast1"],
+    "invalid": ["", "us_central1", "US-CENTRAL1", "us-central", "x'; y"]
+  },
+  "bucket": {
+    "valid": ["my-lab-nf", "abc", "a.b.c", "my-bucket-123"],
+    "invalid": ["", "ab", "My-Bucket", "bucket_underscore", "has..dots", "192.168.1.1", "b'; x"]
+  },
+  "prefix": {
+    "valid": ["", "runs/2026", "runs/v1.2/batch", "a_b-c.d"],
+    "invalid": ["../escape", "runs/../..", "with space", "quote'x", "a\nb"]
+  }
+}

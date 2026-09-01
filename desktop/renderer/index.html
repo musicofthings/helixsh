@@ -61,6 +61,8 @@
                 <option value="apptainer">Apptainer / HPC</option>
                 <option value="singularity">Singularity / HPC</option>
                 <option value="kubernetes">Kubernetes</option>
+                <option value="awsbatch">AWS Batch</option>
+                <option value="googlebatch">Google Batch</option>
               </select>
             </label>
           </div>
@@ -84,15 +86,15 @@
             </div>
           </div>
 
-          <div id="kubernetes-panel" class="subpanel hidden">
+          <div id="kubernetes-panel" class="subpanel hidden" data-runtime="kubernetes">
             <div class="subpanel-heading">
               <div>
                 <span class="eyebrow">Kubernetes</span>
                 <h3>Generate an nf-k8s executor profile</h3>
               </div>
-              <span id="k8s-config-state">Not generated</span>
+              <span id="kubernetes-config-state" class="config-state">Not generated</span>
             </div>
-            <div class="field-grid k8s-grid">
+            <div class="field-grid executor-grid">
               <label>
                 <span>Namespace</span>
                 <input id="namespace" value="default" />
@@ -110,9 +112,72 @@
                 <input id="storageMountPath" value="/workspace" />
               </label>
             </div>
-            <button id="generate-k8s" type="button" class="secondary">Generate secure config</button>
-            <input id="configPath" type="hidden" />
+            <button id="generate-kubernetes" type="button" class="secondary">Generate secure config</button>
           </div>
+
+          <div id="awsbatch-panel" class="subpanel hidden" data-runtime="awsbatch">
+            <div class="subpanel-heading">
+              <div>
+                <span class="eyebrow">AWS Batch</span>
+                <h3>Generate an AWS Batch executor profile</h3>
+              </div>
+              <span id="awsbatch-config-state" class="config-state">Not generated</span>
+            </div>
+            <div class="field-grid executor-grid">
+              <label>
+                <span>Region</span>
+                <input id="awsRegion" placeholder="eu-west-1" />
+              </label>
+              <label>
+                <span>Job queue</span>
+                <input id="awsJobQueue" placeholder="genomics-spot" />
+              </label>
+              <label>
+                <span>S3 bucket for the work directory</span>
+                <input id="awsBucket" placeholder="my-lab-nf" />
+              </label>
+              <label>
+                <span>Key prefix</span>
+                <input id="awsPrefix" placeholder="Optional, e.g. runs/2026" />
+              </label>
+            </div>
+            <p class="credentials-note" id="awsbatch-credentials"></p>
+            <button id="generate-awsbatch" type="button" class="secondary">Generate secure config</button>
+          </div>
+
+          <div id="googlebatch-panel" class="subpanel hidden" data-runtime="googlebatch">
+            <div class="subpanel-heading">
+              <div>
+                <span class="eyebrow">Google Batch</span>
+                <h3>Generate a Google Batch executor profile</h3>
+              </div>
+              <span id="googlebatch-config-state" class="config-state">Not generated</span>
+            </div>
+            <div class="field-grid executor-grid">
+              <label>
+                <span>Project</span>
+                <input id="gcpProject" placeholder="my-lab-project" />
+              </label>
+              <label>
+                <span>Location</span>
+                <input id="gcpLocation" placeholder="us-central1" />
+              </label>
+              <label>
+                <span>Cloud Storage bucket for the work directory</span>
+                <input id="gcpBucket" placeholder="my-lab-nf" />
+              </label>
+              <label>
+                <span>Key prefix</span>
+                <input id="gcpPrefix" placeholder="Optional, e.g. runs/2026" />
+              </label>
+            </div>
+            <p class="credentials-note" id="googlebatch-credentials"></p>
+            <button id="generate-googlebatch" type="button" class="secondary">Generate secure config</button>
+          </div>
+
+          <!-- Shared by every executor panel: only one executor is selected at
+               a time, and switching clears it. -->
+          <input id="configPath" type="hidden" />
 
           <details>
             <summary>Advanced validation</summary>

@@ -56,8 +56,10 @@ Screenshots land in `$TMPDIR/helixsh-shots` (override with `SCREENSHOT_DIR`).
 | `text [sel]` / `eval <js>` | Read the page |
 | `quit` | Close and exit |
 
-Picker kinds are `samplesheet`, `directory`, `workflow`, `schema`, `params`,
-`config`; the field is the input's `id`.
+Picker kinds are `samplesheet`, `directory`, `workflow`, `schema` and
+`params`; the field is the input's `id`. There is no picker for an executor
+config: it pins `process.executor`, and a file chosen from disk does not say
+which executor that is, so the app only accepts one it generated itself.
 
 ## Eval battery
 
@@ -69,10 +71,13 @@ xvfb-run -a node .claude/skills/run-desktop/evals.mjs   # exits non-zero on fail
 ```
 
 It covers plan composition for rnaseq/sarek/viralrecon/scrnaseq, tumour-normal
-detection, Kubernetes config generation, and five guardrails: runtime
-readiness, configuration drift, unapproved paths, a Groovy injection payload,
-and path traversal in a pipeline name. It also carries a regression check for
-the Kubernetes config leaking into a non-Kubernetes run.
+detection, executor config generation for Kubernetes, AWS Batch and Google
+Batch, and seven guardrails: runtime readiness, configuration drift,
+unapproved paths, a Groovy injection payload in a Kubernetes name and in an
+AWS one, a cloud run with no config, and path traversal in a pipeline name. It
+also carries two regression checks on the same hazard — a generated config
+must not follow a change of executor, whether to a local runtime or to another
+cloud one.
 
 ## Gotchas
 

@@ -8,6 +8,16 @@ const MAX_CONSOLE_CHARS = 1_000_000;
 let activeRunId = "";
 let viewedRunId = "";
 let plannedFingerprint = "";
+let capabilityByName = new Map();
+
+// Executors that need a generated config. Each has a panel, a state label and
+// a generate button named after it.
+const EXECUTOR_RUNTIMES = ["kubernetes", "awsbatch", "googlebatch"];
+// The doctor check that says where each cloud executor's credentials come from.
+const CREDENTIAL_CAPABILITY = {
+  awsbatch: "aws-credentials",
+  googlebatch: "google-credentials",
+};
 
 function appendConsole(text, stream = "stdout") {
   const prefix = stream === "stderr" ? "⚠ " : "";
@@ -50,6 +60,7 @@ async function loadCapabilities() {
   const container = byId("capabilities");
   try {
     const capabilities = await window.helixsh.capabilities();
+    capabilityByName = new Map(capabilities.map((item) => [item.name, item]));
     const highlighted = new Set(["nextflow", "docker", "kubernetes"]);
     container.replaceChildren();
     for (const item of capabilities.filter((entry) => highlighted.has(entry.name))) {
@@ -59,12 +70,72 @@ async function loadCapabilities() {
       chip.title = item.details;
       container.appendChild(chip);
     }
+    showCredentialsNote(byId("runtime").value);
   } catch (error) {
     const chip = document.createElement("span");
     chip.className = "status-chip missing";
     chip.textContent = "Backend unavailable";
     container.replaceChildren(chip);
     appendConsole(`${error.message}\n`, "stderr");
+  }
+}
+
+// ── executors ─────────────────────────────────────────────────────────────
+
+/**
+ * Say where a cloud run will get its credentials, before anything is submitted.
+ *
+ * Nothing here gates the run. Credentials that come from an instance profile
+ * or the metadata server leave no local trace, so "unknown" is a normal answer
+ * on exactly the hosts most likely to be submitting -- but a half-configured
+ * environment is worth saying out loud, because otherwise the first sign of it
+ * is a rejected job several minutes after Run.
+ */
+function showCredentialsNote(runtime) {
+  const note = byId(`${runtime}-credentials`);
+  if (!note) return;
+  const capability = capabilityByName.get(CREDENTIAL_CAPABILITY[runtime]);
+  if (!capability) {
+    note.className = "credentials-note";
+    note.textContent = "";
+    return;
+  }
+  // "unknown" gets no colour: it is the normal answer on a host inside the
+  // provider, not something to warn about.
+  const tone = { ok: "ok", missing: "problem" }[capability.state] || "";
+  const label = capability.state === "missing" ? "Credentials problem" : "Credentials";
+  note.className = `credentials-note ${tone}`.trimEnd();
+  note.textContent = `${label}: ${capability.details}.`;
+}
+
+function showExecutorPanel(runtime) {
+  for (const name of EXECUTOR_RUNTIMES) {
+    byId(`${name}-panel`).classList.toggle("hidden", name !== runtime);
+  }
+}
+
+/** Forget any generated config, and say so in every panel that could show one. */
+function clearExecutorConfig() {
+  byId("configPath").value = "";
+  for (const name of EXECUTOR_RUNTIMES) {
+    byId(`${name}-config-state`).textContent = "Not generated";
+  }
+}
+
+async function generateExecutorConfig(runtime, generate, settings) {
+  const state = byId(`${runtime}-config-state`);
+  state.textContent = "Generating…";
+  try {
+    const result = await generate(settings);
+    byId("configPath").value = result.path;
+    state.textContent = "Config ready";
+    plannedFingerprint = "";
+  } catch (error) {
+    // A half-written config must not stay attached: the run would use the
+    // previous executor's settings under the new panel's heading.
+    byId("configPath").value = "";
+    state.textContent = "Generation failed";
+    notice.textContent = error.message;
   }
 }
 
@@ -125,24 +196,35 @@ async function startRun() {
   }
 }
 
-async function generateKubernetesConfig() {
-  const state = byId("k8s-config-state");
-  state.textContent = "Generating…";
-  try {
-    const result = await window.helixsh.generateKubernetesConfig({
+const EXECUTOR_SETTINGS = {
+  kubernetes: () => ({
+    generate: window.helixsh.generateKubernetesConfig,
+    settings: {
       namespace: byId("namespace").value,
       serviceAccount: byId("serviceAccount").value,
       storageClaim: byId("storageClaim").value,
       storageMountPath: byId("storageMountPath").value,
-    });
-    byId("configPath").value = result.path;
-    state.textContent = "Config ready";
-    plannedFingerprint = "";
-  } catch (error) {
-    state.textContent = "Generation failed";
-    notice.textContent = error.message;
-  }
-}
+    },
+  }),
+  awsbatch: () => ({
+    generate: window.helixsh.generateAwsBatchConfig,
+    settings: {
+      region: byId("awsRegion").value,
+      jobQueue: byId("awsJobQueue").value,
+      bucket: byId("awsBucket").value,
+      prefix: byId("awsPrefix").value,
+    },
+  }),
+  googlebatch: () => ({
+    generate: window.helixsh.generateGoogleBatchConfig,
+    settings: {
+      project: byId("gcpProject").value,
+      location: byId("gcpLocation").value,
+      bucket: byId("gcpBucket").value,
+      prefix: byId("gcpPrefix").value,
+    },
+  }),
+};
 
 document.querySelectorAll("[data-picker]").forEach((button) => {
   button.addEventListener("click", async () => {
@@ -157,15 +239,15 @@ document.querySelectorAll("[data-picker]").forEach((button) => {
 });
 
 byId("runtime").addEventListener("change", () => {
-  const isKubernetes = byId("runtime").value === "kubernetes";
-  byId("kubernetes-panel").classList.toggle("hidden", !isKubernetes);
-  if (!isKubernetes) {
-    // Hiding the panel must also drop the generated config: it is invisible
-    // once hidden, and leaving it attached would apply the k8s executor to a
-    // local run.
-    byId("configPath").value = "";
-    byId("k8s-config-state").textContent = "Not generated";
-  }
+  const runtime = byId("runtime").value;
+  showExecutorPanel(runtime);
+  // Changing executor always drops the generated config, even between two
+  // executors that both need one: the file pins `process.executor`, so an AWS
+  // Batch config left attached to a Google Batch run would submit to AWS under
+  // the wrong heading. The main process refuses that too; this keeps the form
+  // from ever offering it.
+  clearExecutorConfig();
+  showCredentialsNote(runtime);
   plannedFingerprint = "";
 });
 byId("run-form").addEventListener("submit", (event) => {
@@ -173,7 +255,18 @@ byId("run-form").addEventListener("submit", (event) => {
   planRun();
 });
 byId("run").addEventListener("click", startRun);
-byId("generate-k8s").addEventListener("click", generateKubernetesConfig);
+for (const runtime of EXECUTOR_RUNTIMES) {
+  byId(`generate-${runtime}`).addEventListener("click", () => {
+    const { generate, settings } = EXECUTOR_SETTINGS[runtime]();
+    generateExecutorConfig(runtime, generate, settings);
+  });
+  // Editing a setting invalidates the config generated from the previous ones.
+  // Left alone, the panel would still read "Config ready" while the run used
+  // the queue or cluster the user had just changed away from.
+  for (const event of ["input", "change"]) {
+    byId(`${runtime}-panel`).addEventListener(event, clearExecutorConfig);
+  }
+}
 byId("cancel").addEventListener("click", async () => {
   if (!viewedRunId) return;
   await window.helixsh.cancel(viewedRunId);
