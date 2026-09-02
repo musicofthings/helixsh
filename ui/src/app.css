@@ -1,3 +1,12 @@
+/* Design tokens and themes for the command shell.
+ *
+ * The palettes match the ones the Electron runner ships, so a user who picks
+ * "Cursor Light" in one surface gets the same colours in the other. Theme
+ * selection lives in src/theme.js, which writes `data-theme` on <html>.
+ *
+ * Component styles must name tokens, never literals: a hard-coded colour is a
+ * rule that only works in one theme. */
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -5,25 +14,123 @@
 }
 
 :root {
-  --bg:        #0d1117;
-  --bg2:       #161b22;
-  --bg3:       #21262d;
-  --bg4:       #2d333b;
-  --border:    #30363d;
-  --text:      #e6edf3;
-  --muted:     #8b949e;
-  --accent:    #58a6ff;
-  --green:     #3fb950;
-  --yellow:    #d29922;
-  --red:       #f85149;
-  --purple:    #d2a8ff;
-  --orange:    #ffa657;
   --radius:    6px;
-  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --font-mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   --font-ui:   -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --titlebar:  36px;
   --sidebar:   220px;
   --statusbar: 28px;
+}
+
+/* ── Helix Dark ───────────────────────────────────────────────────────────── */
+
+:root,
+:root[data-theme="helix-dark"] {
+  color-scheme: dark;
+  --bg:            #0b1210;
+  --bg2:           #101b18;
+  --bg3:           #17241f;
+  --bg4:           #2d4a40;
+  --border:        #1f342d;
+  --text:          #eaf6f0;
+  --muted:         #9db3ab;
+  --accent:        #6fe0b6;
+  --green:         #6fe0b6;
+  --yellow:        #f0c073;
+  --red:           #ff9a92;
+  --purple:        #cbb2ff;
+  --orange:        #f5b380;
+  --role-auditor:  #7fc4ff;
+  --role-analyst:  #6fe0b6;
+  --role-admin:    #cbb2ff;
+}
+
+/* ── Helix Light ──────────────────────────────────────────────────────────── */
+
+:root[data-theme="helix-light"] {
+  color-scheme: light;
+  --bg:            #f4f7f5;
+  --bg2:           #ffffff;
+  --bg3:           #eaf0ec;
+  --bg4:           #c1d0c8;
+  --border:        #dde5e0;
+  --text:          #0f1a17;
+  --muted:         #4f6259;
+  --accent:        #0b7a50;
+  --green:         #0b7a50;
+  --yellow:        #8a5a05;
+  --red:           #b3261e;
+  --purple:        #6b3fb5;
+  --orange:        #9a5312;
+  --role-auditor:  #0b5cad;
+  --role-analyst:  #0a6d47;
+  --role-admin:    #6b3fb5;
+}
+
+/* ── Cursor Dark ──────────────────────────────────────────────────────────── */
+
+:root[data-theme="cursor-dark"] {
+  color-scheme: dark;
+  --bg:            #141414;
+  --bg2:           #1a1a1a;
+  --bg3:           #212121;
+  --bg4:           #414141;
+  --border:        #2e2e2e;
+  --text:          #e6e6e6;
+  --muted:         #a6a6a6;
+  --accent:        #6cb8fb;
+  --green:         #55c98d;
+  --yellow:        #e2b357;
+  --red:           #f28b81;
+  --purple:        #d2a8ff;
+  --orange:        #f0a868;
+  --role-auditor:  #6cb8fb;
+  --role-analyst:  #55c98d;
+  --role-admin:    #d2a8ff;
+}
+
+/* ── Cursor Light ─────────────────────────────────────────────────────────── */
+
+:root[data-theme="cursor-light"] {
+  color-scheme: light;
+  --bg:            #f8f8f8;
+  --bg2:           #ffffff;
+  --bg3:           #f3f3f3;
+  --bg4:           #cecece;
+  --border:        #e5e5e5;
+  --text:          #1f1f1f;
+  --muted:         #545454;
+  --accent:        #005fb8;
+  --green:         #157a32;
+  --yellow:        #9a6700;
+  --red:           #cf222e;
+  --purple:        #6639ba;
+  --orange:        #8a4b00;
+  --role-auditor:  #005fb8;
+  --role-analyst:  #0f6b2a;
+  --role-admin:    #6639ba;
+}
+
+/* ── Paper ────────────────────────────────────────────────────────────────── */
+
+:root[data-theme="paper"] {
+  color-scheme: light;
+  --bg:            #faf8f4;
+  --bg2:           #fffdfa;
+  --bg3:           #f3efe7;
+  --bg4:           #ccc2ae;
+  --border:        #e6e0d4;
+  --text:          #201c16;
+  --muted:         #5a5245;
+  --accent:        #0d5f57;
+  --green:         #2f6b3a;
+  --yellow:        #8a5a05;
+  --red:           #a8261e;
+  --purple:        #64408f;
+  --orange:        #8a4b16;
+  --role-auditor:  #0f5b8a;
+  --role-analyst:  #2f6b3a;
+  --role-admin:    #64408f;
 }
 
 html, body, #app {
@@ -52,7 +159,7 @@ button {
   font: inherit;
 }
 
-input, textarea {
+input, textarea, select {
   background: none;
   border: none;
   color: var(--text);
@@ -61,4 +168,19 @@ input, textarea {
   outline: none;
 }
 
+/* Without this the keyboard path through the shell is invisible: nothing here
+   carries a focus style of its own. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 a { color: var(--accent); text-decoration: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

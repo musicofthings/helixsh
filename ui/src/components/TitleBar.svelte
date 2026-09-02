@@ -1,5 +1,6 @@
 <script>
   import { invoke } from "@tauri-apps/api/core";
+  import { THEMES, theme } from "../theme.js";
 
   async function action(a) {
     await invoke("window_action", { action: a });
@@ -12,6 +13,14 @@
   <div class="left">
     <span class="logo">⬡ helixsh</span>
   </div>
+  <div class="right">
+    <label class="visually-hidden" for="theme">Colour theme</label>
+    <select id="theme" class="theme" bind:value={$theme}>
+      {#each THEMES as { id, label }}
+        <option value={id}>{label}</option>
+      {/each}
+    </select>
+  </div>
   <div class="controls" on:mousedown|stopPropagation>
     <button class="ctrl close"    on:click={() => action("close")}    title="Close"    aria-label="Close"></button>
     <button class="ctrl minimize" on:click={() => action("minimize")} title="Minimize" aria-label="Minimize"></button>
@@ -23,7 +32,7 @@
   .titlebar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 12px;
     height: var(--titlebar);
     background: var(--bg2);
     border-bottom: 1px solid var(--border);
@@ -32,13 +41,31 @@
     -webkit-app-region: drag;
     cursor: default;
   }
-  .left { display: flex; align-items: center; gap: 8px; }
+  .left { display: flex; flex: 1; align-items: center; gap: 8px; }
   .logo { font-weight: 700; font-size: 13px; color: var(--accent); letter-spacing: -0.3px; }
-  .controls {
+  .controls,
+  .right {
     display: flex;
     align-items: center;
     gap: 8px;
     -webkit-app-region: no-drag;
+  }
+  .theme {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 11px;
+    padding: 2px 4px;
+  }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .ctrl {
     width: 12px; height: 12px;

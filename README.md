@@ -218,6 +218,8 @@ It provides:
   configuration
 - live output and full process-group cancellation
 - deterministic argument arrays and the Helixsh POSIX execution boundary
+- five themes — Helix Dark and Light, Cursor Dark and Light, and Paper —
+  switchable from the top bar, or following the operating system
 
 Each executor's settings are validated against the provider's own naming rules
 before anything is written, and the generated config is pinned to the executor
@@ -243,7 +245,8 @@ universal packaging, and bundled Python/Nextflow runtimes remain release work.
 
 The Tauri/Svelte application offers Warp-style command blocks, intent mode,
 autocomplete, command history, RBAC and strict-mode controls, live doctor
-status, and nf-core pipeline discovery.
+status, and nf-core pipeline discovery. It carries the same five themes as the
+runner, switchable from the title bar.
 
 ```bash
 cd ui
@@ -253,6 +256,24 @@ npm run tauri build
 
 See [`ui/README.md`](ui/README.md) for platform prerequisites and sidecar
 packaging.
+
+### Themes
+
+Both surfaces ship the same palettes, so a theme chosen in one reads the same
+in the other:
+
+| Theme | Look |
+|---|---|
+| **Match system** | Follows `prefers-color-scheme`: Helix Dark or Cursor Light |
+| **Helix Dark** | The green-tinted default |
+| **Helix Light** | The same identity on white |
+| **Cursor Dark** | Neutral greys with a blue accent |
+| **Cursor Light** | Editor-style white with a blue accent |
+| **Paper** | Warm off-white with a teal accent |
+
+The runner stores the choice through the main process, which also paints the
+window background to match, so a light theme does not open with a flash of the
+dark one. Every palette meets WCAG AA for all rendered text.
 
 ---
 
@@ -1206,9 +1227,12 @@ to run anywhere.
   FASTQ-to-run path.
 - Bytecode compile check: **pass** (`python -m compileall -q src`).
 - Electron dependency audit: **0 vulnerabilities** (`npm audit`).
-- Tauri/Svelte production build: **not re-verified** — `ui/` dependencies are
-  not installed in the environment this was last checked from. CI is the
-  authority for it.
+- Tauri/Svelte production build: **pass** (`npm run build` in `ui/`), and the
+  built bundle verified to mount and render in every theme. It did not before:
+  `@sveltejs/vite-plugin-svelte` was pinned to `^4`, which does not support the
+  `^6` Vite the project also pins, so the bundle resolved Svelte's server build
+  and threw `mount(...) is not available on the server` at startup. The plugin
+  is now `^5`. The Rust `tauri build` step still has CI as its authority.
 
 ## Packaging
 

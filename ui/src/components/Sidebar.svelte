@@ -36,7 +36,13 @@
   });
 
   const ROLES = ["auditor", "analyst", "admin"];
-  const ROLE_COLORS = { auditor: "#58a6ff", analyst: "#3fb950", admin: "#d2a8ff" };
+  // Tokens, not literals: these sit on the panel background, which is white in
+  // three of the five themes.
+  const ROLE_COLORS = {
+    auditor: "var(--role-auditor)",
+    analyst: "var(--role-analyst)",
+    admin: "var(--role-admin)",
+  };
 </script>
 
 <aside class="sidebar">
