@@ -5,6 +5,7 @@ const {
   BrowserWindow,
   dialog,
   ipcMain,
+  nativeTheme,
   session,
   shell,
 } = require("electron");
@@ -27,6 +28,7 @@ const {
   validateRunRequest,
 } = require("./lib/helixsh.cjs");
 const { STATUS, createRunStore, isProcessAlive } = require("./lib/runstore.cjs");
+const { backgroundFor, normalizeTheme, readSettings, writeSettings } = require("./lib/settings.cjs");
 const { collectResults } = require("./lib/results.cjs");
 
 const MAX_CAPTURE_BYTES = 2 * 1024 * 1024;
@@ -45,6 +47,10 @@ const MAX_LOG_REPLAY_BYTES = 512 * 1024;
 let runStore = null;
 let mainWindow = null;
 let approvedPlan = null;
+
+function settings() {
+  return readSettings(app.getPath("userData"));
+}
 
 function store() {
   if (!runStore) {
@@ -416,6 +422,23 @@ async function generateExecutorConfig(event, { runtime, folder, basename, reques
 }
 
 function registerIpc() {
+  ipcMain.handle("helixsh:get-settings", (event) => {
+    assertTrustedSender(event);
+    return settings();
+  });
+
+  ipcMain.handle("helixsh:set-theme", (event, theme) => {
+    assertTrustedSender(event);
+    const stored = writeSettings(app.getPath("userData"), { theme: normalizeTheme(theme) });
+    // Keep the window's own background in step, so the next launch -- and any
+    // moment the renderer has not painted, such as a resize -- shows the
+    // theme the user chose rather than the one it shipped with.
+    mainWindow.setBackgroundColor(
+      backgroundFor(stored.theme, { prefersDark: nativeTheme.shouldUseDarkColors }),
+    );
+    return stored;
+  });
+
   ipcMain.handle("helixsh:capabilities", async (event) => {
     assertTrustedSender(event);
     const result = await runBackend(["doctor", "--json"], { timeoutMs: DOCTOR_TIMEOUT_MS });
@@ -640,13 +663,14 @@ function registerIpc() {
 }
 
 function createWindow() {
+  const theme = settings().theme;
   mainWindow = new BrowserWindow({
     width: 1260,
     height: 820,
     minWidth: 980,
     minHeight: 680,
     title: "Helixsh",
-    backgroundColor: "#07110f",
+    backgroundColor: backgroundFor(theme, { prefersDark: nativeTheme.shouldUseDarkColors }),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -679,7 +703,10 @@ function createWindow() {
       }, 1500);
     });
   }
-  mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
+  // The theme travels on the URL rather than over IPC: the renderer has to
+  // know it before its first paint, and an IPC round trip is a frame too late,
+  // which a user on a light theme sees as a dark flash on every launch.
+  mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"), { query: { theme } });
 }
 
 app.whenReady().then(() => {

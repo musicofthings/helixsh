@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="helix-dark">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -9,6 +9,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Helixsh</title>
     <link rel="stylesheet" href="./styles.css" />
+    <!-- Not deferred: it resolves the stored theme onto <html> before the body
+         paints, so a light theme does not start with a flash of the dark one. -->
+    <script src="./theme.js"></script>
     <script src="./app.js" defer></script>
   </head>
   <body>
@@ -20,25 +23,47 @@
           <p>nf-core execution, without the terminal friction.</p>
         </div>
       </div>
-      <div id="capabilities" class="capabilities" aria-live="polite">
-        <span class="status-chip pending">Checking runtimes…</span>
+
+      <div class="topbar-tools">
+        <div id="capabilities" class="capabilities" role="status" aria-live="polite">
+          <span class="status-chip">Checking runtimes…</span>
+        </div>
+
+        <div class="theme-picker">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none" />
+          </svg>
+          <label for="theme" class="visually-hidden">Colour theme</label>
+          <select id="theme">
+            <option value="system">Match system</option>
+            <option value="helix-dark">Helix Dark</option>
+            <option value="helix-light">Helix Light</option>
+            <option value="cursor-dark">Cursor Dark</option>
+            <option value="cursor-light">Cursor Light</option>
+            <option value="paper">Paper</option>
+          </select>
+        </div>
       </div>
     </header>
 
     <main class="workspace">
-      <section class="panel configuration">
+      <section class="panel configuration" aria-labelledby="configuration-heading">
         <div class="section-heading">
           <div>
             <span class="eyebrow">Pipeline</span>
-            <h2>Configure a run</h2>
+            <h2 id="configuration-heading">Configure a run</h2>
           </div>
           <span class="security-label">Sandboxed UI</span>
         </div>
 
         <form id="run-form">
           <div class="field-grid">
-            <label>
-              <span>nf-core pipeline <button id="browse-pipelines" type="button" class="link-button">Browse</button></span>
+            <div class="field">
+              <div class="field-head">
+                <label for="pipeline">nf-core pipeline</label>
+                <button id="browse-pipelines" type="button" class="link-button">Browse</button>
+              </div>
               <input id="pipeline" name="pipeline" value="rnaseq" list="pipelines" required />
               <datalist id="pipelines">
                 <option value="rnaseq"></option>
@@ -48,13 +73,13 @@
                 <option value="scrnaseq"></option>
                 <option value="viralrecon"></option>
               </datalist>
-            </label>
-            <label>
-              <span>Release or revision</span>
+            </div>
+            <div class="field">
+              <div class="field-head"><label for="revision">Release or revision</label></div>
               <input id="revision" name="revision" placeholder="Recommended, e.g. 3.18.0" />
-            </label>
-            <label>
-              <span>Execution target</span>
+            </div>
+            <div class="field">
+              <div class="field-head"><label for="runtime">Execution target</label></div>
               <select id="runtime" name="runtime">
                 <option value="docker">Local Docker</option>
                 <option value="podman">Local Podman</option>
@@ -64,24 +89,34 @@
                 <option value="awsbatch">AWS Batch</option>
                 <option value="googlebatch">Google Batch</option>
               </select>
-            </label>
+            </div>
           </div>
 
           <div class="file-grid">
-            <div class="file-field">
-              <span>Samplesheet</span>
+            <div class="field">
+              <div class="field-head">
+                <label for="inputPath">Samplesheet</label>
+                <button id="build-samplesheet" type="button" class="link-button">
+                  Build from FASTQs
+                </button>
+              </div>
               <div class="file-control">
                 <input id="inputPath" readonly placeholder="Optional CSV" />
-                <button type="button" data-picker="samplesheet" data-target="inputPath">Choose</button>
-                <button id="build-samplesheet" type="button" title="Build one from a directory of FASTQ files">Build</button>
+                <button type="button" data-picker="samplesheet" data-target="inputPath">
+                  Choose<span class="visually-hidden"> a samplesheet</span>
+                </button>
               </div>
-              <div id="samplesheet-state" class="sheet-state"></div>
+              <div id="samplesheet-state" class="sheet-state" role="status" aria-live="polite"></div>
             </div>
-            <div class="file-field">
-              <span>Output directory</span>
+            <div class="field">
+              <div class="field-head"><label for="outputPath">Output directory</label></div>
               <div class="file-control">
-                <input id="outputPath" readonly required placeholder="Choose results directory" />
-                <button type="button" data-picker="directory" data-target="outputPath">Choose</button>
+                <!-- `required` is inert on a readonly input, so the check that
+                     an output directory was chosen lives in app.js. -->
+                <input id="outputPath" readonly aria-required="true" placeholder="Choose results directory" />
+                <button type="button" data-picker="directory" data-target="outputPath">
+                  Choose<span class="visually-hidden"> an output directory</span>
+                </button>
               </div>
             </div>
           </div>
@@ -95,22 +130,22 @@
               <span id="kubernetes-config-state" class="config-state">Not generated</span>
             </div>
             <div class="field-grid executor-grid">
-              <label>
-                <span>Namespace</span>
+              <div class="field">
+                <div class="field-head"><label for="namespace">Namespace</label></div>
                 <input id="namespace" value="default" />
-              </label>
-              <label>
-                <span>Service account</span>
+              </div>
+              <div class="field">
+                <div class="field-head"><label for="serviceAccount">Service account</label></div>
                 <input id="serviceAccount" value="nextflow" />
-              </label>
-              <label>
-                <span>Persistent volume claim</span>
+              </div>
+              <div class="field">
+                <div class="field-head"><label for="storageClaim">Persistent volume claim</label></div>
                 <input id="storageClaim" placeholder="nextflow-pvc" />
-              </label>
-              <label>
-                <span>Mount path</span>
+              </div>
+              <div class="field">
+                <div class="field-head"><label for="storageMountPath">Mount path</label></div>
                 <input id="storageMountPath" value="/workspace" />
-              </label>
+              </div>
             </div>
             <button id="generate-kubernetes" type="button" class="secondary">Generate secure config</button>
           </div>
@@ -124,22 +159,22 @@
               <span id="awsbatch-config-state" class="config-state">Not generated</span>
             </div>
             <div class="field-grid executor-grid">
-              <label>
-                <span>Region</span>
+              <div class="field">
+                <div class="field-head"><label for="awsRegion">Region</label></div>
                 <input id="awsRegion" placeholder="eu-west-1" />
-              </label>
-              <label>
-                <span>Job queue</span>
+              </div>
+              <div class="field">
+                <div class="field-head"><label for="awsJobQueue">Job queue</label></div>
                 <input id="awsJobQueue" placeholder="genomics-spot" />
-              </label>
-              <label>
-                <span>S3 bucket for the work directory</span>
+              </div>
+              <div class="field">
+                <div class="field-head"><label for="awsBucket">S3 bucket for the work directory</label></div>
                 <input id="awsBucket" placeholder="my-lab-nf" />
-              </label>
-              <label>
-                <span>Key prefix</span>
+              </div>
+              <div class="field">
+                <div class="field-head"><label for="awsPrefix">Key prefix</label></div>
                 <input id="awsPrefix" placeholder="Optional, e.g. runs/2026" />
-              </label>
+              </div>
             </div>
             <p class="credentials-note" id="awsbatch-credentials"></p>
             <button id="generate-awsbatch" type="button" class="secondary">Generate secure config</button>
@@ -154,22 +189,22 @@
               <span id="googlebatch-config-state" class="config-state">Not generated</span>
             </div>
             <div class="field-grid executor-grid">
-              <label>
-                <span>Project</span>
+              <div class="field">
+                <div class="field-head"><label for="gcpProject">Project</label></div>
                 <input id="gcpProject" placeholder="my-lab-project" />
-              </label>
-              <label>
-                <span>Location</span>
+              </div>
+              <div class="field">
+                <div class="field-head"><label for="gcpLocation">Location</label></div>
                 <input id="gcpLocation" placeholder="us-central1" />
-              </label>
-              <label>
-                <span>Cloud Storage bucket for the work directory</span>
+              </div>
+              <div class="field">
+                <div class="field-head"><label for="gcpBucket">Cloud Storage bucket for the work directory</label></div>
                 <input id="gcpBucket" placeholder="my-lab-nf" />
-              </label>
-              <label>
-                <span>Key prefix</span>
+              </div>
+              <div class="field">
+                <div class="field-head"><label for="gcpPrefix">Key prefix</label></div>
                 <input id="gcpPrefix" placeholder="Optional, e.g. runs/2026" />
-              </label>
+              </div>
             </div>
             <p class="credentials-note" id="googlebatch-credentials"></p>
             <button id="generate-googlebatch" type="button" class="secondary">Generate secure config</button>
@@ -182,36 +217,44 @@
           <details>
             <summary>Advanced validation</summary>
             <div class="advanced-grid">
-              <div class="file-field">
-                <span>Workflow source</span>
+              <div class="field">
+                <div class="field-head"><label for="workflowPath">Workflow source</label></div>
                 <div class="file-control">
                   <input id="workflowPath" readonly placeholder="main.nf" />
-                  <button type="button" data-picker="workflow" data-target="workflowPath">Choose</button>
+                  <button type="button" data-picker="workflow" data-target="workflowPath">
+                    Choose<span class="visually-hidden"> a workflow source</span>
+                  </button>
                 </div>
               </div>
-              <div class="file-field">
-                <span>Schema JSON</span>
+              <div class="field">
+                <div class="field-head"><label for="schemaPath">Schema JSON</label></div>
                 <div class="file-control">
                   <input id="schemaPath" readonly placeholder="nextflow_schema.json" />
-                  <button type="button" data-picker="schema" data-target="schemaPath">Choose</button>
+                  <button type="button" data-picker="schema" data-target="schemaPath">
+                    Choose<span class="visually-hidden"> a schema file</span>
+                  </button>
                 </div>
               </div>
-              <div class="file-field">
-                <span>Parameters JSON</span>
+              <div class="field">
+                <div class="field-head"><label for="paramsPath">Parameters JSON</label></div>
                 <div class="file-control">
                   <input id="paramsPath" readonly placeholder="params.json" />
-                  <button type="button" data-picker="params" data-target="paramsPath">Choose</button>
+                  <button type="button" data-picker="params" data-target="paramsPath">
+                    Choose<span class="visually-hidden"> a parameters file</span>
+                  </button>
                 </div>
               </div>
-              <div class="file-field">
-                <span>Container image check</span>
+              <div class="field">
+                <div class="field-head"><label for="image">Container image check</label></div>
                 <input id="image" placeholder="quay.io/…@sha256:…" />
               </div>
-              <div class="file-field">
-                <span>Offline cache</span>
+              <div class="field">
+                <div class="field-head"><label for="cacheRoot">Offline cache</label></div>
                 <div class="file-control">
                   <input id="cacheRoot" readonly placeholder=".helixsh_cache" />
-                  <button type="button" data-picker="directory" data-target="cacheRoot">Choose</button>
+                  <button type="button" data-picker="directory" data-target="cacheRoot">
+                    Choose<span class="visually-hidden"> an offline cache directory</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -230,28 +273,30 @@
         </form>
       </section>
 
-      <div id="pipeline-browser" class="browser hidden" role="dialog" aria-modal="true" aria-label="Choose a pipeline">
+      <div id="pipeline-browser" class="browser hidden" role="dialog" aria-modal="true" aria-labelledby="browser-heading">
         <div class="browser-panel">
           <div class="browser-heading">
-            <h3>nf-core pipelines</h3>
+            <h3 id="browser-heading">nf-core pipelines</h3>
             <button id="close-browser" type="button" class="link-button">Close</button>
           </div>
           <ul id="pipeline-list" class="pipeline-list"></ul>
         </div>
       </div>
 
-      <section class="panel activity">
+      <section class="panel activity" aria-labelledby="activity-heading">
         <div class="section-heading">
           <div>
             <span class="eyebrow">Activity</span>
-            <h2>Run console</h2>
+            <h2 id="activity-heading">Run console</h2>
           </div>
           <span id="run-state" class="run-state idle">Idle</span>
         </div>
-        <div id="notice" class="notice">
+        <!-- The status line, not the console, is what a screen reader should
+             announce: the console streams megabytes of pipeline output. -->
+        <div id="notice" class="notice" role="status" aria-live="polite">
           Select a pipeline and validate the plan. Helixsh will show the exact Nextflow command before execution.
         </div>
-        <pre id="console" tabindex="0" aria-live="polite"></pre>
+        <pre id="console" tabindex="0" role="log" aria-live="off" aria-label="Pipeline output"></pre>
 
         <div id="results" class="results hidden">
           <div class="results-heading">
@@ -266,7 +311,7 @@
             <span class="eyebrow">History</span>
             <button id="refresh-runs" type="button" class="link-button">Refresh</button>
           </div>
-          <ul id="runs" class="runs" aria-live="polite">
+          <ul id="runs" class="runs">
             <li class="runs-empty">No runs yet.</li>
           </ul>
         </div>

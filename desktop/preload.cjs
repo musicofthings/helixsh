@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld(
   "helixsh",
   Object.freeze({
     capabilities: () => ipcRenderer.invoke("helixsh:capabilities"),
+    getSettings: () => ipcRenderer.invoke("helixsh:get-settings"),
+    setTheme: (theme) => ipcRenderer.invoke("helixsh:set-theme", theme),
     selectPath: (kind) => ipcRenderer.invoke("helixsh:select-path", kind),
     plan: (request) => ipcRenderer.invoke("helixsh:plan", request),
     start: (request) => ipcRenderer.invoke("helixsh:start", request),

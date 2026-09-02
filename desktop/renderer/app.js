@@ -5,10 +5,19 @@ const consoleElement = byId("console");
 const runState = byId("run-state");
 const notice = byId("notice");
 const MAX_CONSOLE_CHARS = 1_000_000;
+// Trimming back to the cap would re-serialise the whole buffer on every line
+// once a run passed it. Trimming to a lower mark makes that cost occur once
+// per 200k characters instead.
+const CONSOLE_TRIM_TO = 800_000;
 let activeRunId = "";
 let viewedRunId = "";
 let plannedFingerprint = "";
 let capabilityByName = new Map();
+let consoleLength = 0;
+let stickToConsoleTail = true;
+let scrollScheduled = false;
+// Restored when the pipeline browser closes, so Escape does not strand focus.
+let browserOpener = null;
 
 // Executors that need a generated config. Each has a panel, a state label and
 // a generate button named after it.
@@ -19,14 +28,65 @@ const CREDENTIAL_CAPABILITY = {
   googlebatch: "google-credentials",
 };
 
+/**
+ * Follow the tail of the output, unless the user has scrolled away from it.
+ *
+ * Assigning `scrollTop` forces a synchronous layout, and doing that once per
+ * chunk made a chatty pipeline quadratic: a thousand lines took twenty-four
+ * seconds of frozen window, all of it layout. Once per turn of the event loop
+ * is indistinguishable on screen and costs one layout per frame instead of one
+ * per line.
+ */
+function followConsoleTail() {
+  if (!stickToConsoleTail || scrollScheduled) return;
+  scrollScheduled = true;
+  setTimeout(() => {
+    scrollScheduled = false;
+    consoleElement.scrollTop = consoleElement.scrollHeight;
+  }, 0);
+}
+
+// Scrolling back to read something used to be undone by the next line of
+// output. A scroll event fires at most once a frame, so measuring here is not
+// the cost that measuring on every chunk was.
+consoleElement.addEventListener("scroll", () => {
+  const fromBottom =
+    consoleElement.scrollHeight - consoleElement.scrollTop - consoleElement.clientHeight;
+  stickToConsoleTail = fromBottom < 40;
+});
+
 function appendConsole(text, stream = "stdout") {
-  const prefix = stream === "stderr" ? "⚠ " : "";
-  const updated = `${consoleElement.textContent}${prefix}${text}`;
-  consoleElement.textContent =
-    updated.length > MAX_CONSOLE_CHARS
-      ? `[earlier output truncated]\n${updated.slice(-MAX_CONSOLE_CHARS)}`
-      : updated;
-  consoleElement.scrollTop = consoleElement.scrollHeight;
+  const prefix = stream === "stderr" ? "\u26a0 " : "";
+  // Appending a node keeps a long run cheap. Reading `textContent` back and
+  // reassigning it re-serialised the whole buffer for every chunk, which on a
+  // pipeline that prints steadily is a megabyte of string work per line.
+  consoleElement.append(`${prefix}${text}`);
+  consoleLength += prefix.length + text.length;
+  if (consoleLength > MAX_CONSOLE_CHARS) {
+    const kept = consoleElement.textContent.slice(-CONSOLE_TRIM_TO);
+    consoleElement.textContent = `[earlier output truncated]\n${kept}`;
+    consoleLength = consoleElement.textContent.length;
+  }
+  followConsoleTail();
+}
+
+/** Empty the console, keeping the character count that bounds it in step. */
+function clearConsole() {
+  consoleElement.textContent = "";
+  consoleLength = 0;
+  stickToConsoleTail = true;
+}
+
+/**
+ * Say what is going on, in the one place that is announced.
+ *
+ * `problem` is not decoration: the notice is the only running commentary the
+ * app gives, and an error printed in the same grey as an instruction reads as
+ * an instruction.
+ */
+function setNotice(text, kind = "") {
+  notice.className = `notice ${kind}`.trimEnd();
+  notice.textContent = text;
 }
 
 function setRunState(label, state) {
@@ -114,36 +174,56 @@ function showExecutorPanel(runtime) {
   }
 }
 
+function setConfigState(runtime, label, kind = "") {
+  const state = byId(`${runtime}-config-state`);
+  state.className = `config-state ${kind}`.trimEnd();
+  state.textContent = label;
+}
+
 /** Forget any generated config, and say so in every panel that could show one. */
 function clearExecutorConfig() {
   byId("configPath").value = "";
-  for (const name of EXECUTOR_RUNTIMES) {
-    byId(`${name}-config-state`).textContent = "Not generated";
-  }
+  for (const name of EXECUTOR_RUNTIMES) setConfigState(name, "Not generated");
 }
 
 async function generateExecutorConfig(runtime, generate, settings) {
-  const state = byId(`${runtime}-config-state`);
-  state.textContent = "Generating…";
+  const button = byId(`generate-${runtime}`);
+  setConfigState(runtime, "Generating…");
+  button.disabled = true;
   try {
     const result = await generate(settings);
     byId("configPath").value = result.path;
-    state.textContent = "Config ready";
+    setConfigState(runtime, "Config ready", "ready");
     plannedFingerprint = "";
   } catch (error) {
     // A half-written config must not stay attached: the run would use the
     // previous executor's settings under the new panel's heading.
     byId("configPath").value = "";
-    state.textContent = "Generation failed";
-    notice.textContent = error.message;
+    setConfigState(runtime, "Generation failed", "problem");
+    setNotice(error.message, "problem");
+  } finally {
+    button.disabled = false;
   }
 }
 
 async function planRun() {
   const request = requestFromForm();
+  // `required` does nothing on a readonly input -- it is barred from
+  // constraint validation -- so an empty output directory used to reach the
+  // backend and come back as a validation error several seconds later.
+  if (!request.outputPath) {
+    plannedFingerprint = "";
+    setRunState("Needs attention", "error");
+    setNotice("Choose an output directory before validating the plan.", "problem");
+    byId("outputPath").focus();
+    return;
+  }
+
+  const plan = byId("plan");
+  plan.disabled = true;
   setRunState("Validating", "active");
-  notice.textContent = "Running Helixsh preflight checks…";
-  consoleElement.textContent = "";
+  setNotice("Running Helixsh preflight checks…");
+  clearConsole();
   try {
     const result = await window.helixsh.plan(request);
     appendConsole(result.stdout);
@@ -151,24 +231,26 @@ async function planRun() {
     if (result.code === 0) {
       plannedFingerprint = fingerprint(request);
       setRunState("Plan ready", "ok");
-      notice.textContent = "Validation complete. Review the command below, then run when ready.";
+      setNotice("Validation complete. Review the command below, then run when ready.");
     } else {
       plannedFingerprint = "";
       setRunState("Needs attention", "error");
-      notice.textContent = "The plan did not pass. Resolve the reported issue before execution.";
+      setNotice("The plan did not pass. Resolve the reported issue before execution.", "problem");
     }
   } catch (error) {
     plannedFingerprint = "";
     setRunState("Validation failed", "error");
-    notice.textContent = error.message;
+    setNotice(error.message, "problem");
     appendConsole(`${error.message}\n`, "stderr");
+  } finally {
+    plan.disabled = false;
   }
 }
 
 async function startRun() {
   const request = requestFromForm();
   if (fingerprint(request) !== plannedFingerprint) {
-    notice.textContent = "The configuration changed. Validate the plan again before running.";
+    setNotice("The configuration changed. Validate the plan again before running.", "problem");
     setRunState("Revalidate", "error");
     return;
   }
@@ -176,7 +258,7 @@ async function startRun() {
   try {
     const result = await window.helixsh.start(request);
     if (result.cancelled) {
-      notice.textContent = "Execution cancelled. The reviewed plan was not started.";
+      setNotice("Execution cancelled. The reviewed plan was not started.");
       return;
     }
     activeRunId = result.runId;
@@ -184,14 +266,15 @@ async function startRun() {
     byId("cancel").classList.remove("hidden");
     byId("run").disabled = true;
     setRunState("Running", "active");
-    notice.textContent =
-      "The pipeline is running. It keeps running if you close Helixsh, and reappears here next time.";
+    setNotice(
+      "The pipeline is running. It keeps running if you close Helixsh, and reappears here next time.",
+    );
     appendConsole(`\n[desktop] started run ${activeRunId}\n`);
     byId("results").classList.add("hidden");
     refreshRuns();
   } catch (error) {
     setRunState("Start failed", "error");
-    notice.textContent = error.message;
+    setNotice(error.message, "problem");
     appendConsole(`${error.message}\n`, "stderr");
   }
 }
@@ -270,24 +353,32 @@ for (const runtime of EXECUTOR_RUNTIMES) {
 byId("cancel").addEventListener("click", async () => {
   if (!viewedRunId) return;
   await window.helixsh.cancel(viewedRunId);
-  notice.textContent = "Cancellation requested. Nextflow may take a moment to stop.";
+  setNotice("Cancellation requested. Nextflow may take a moment to stop.");
   refreshRuns();
 });
 
 byId("refresh-runs").addEventListener("click", refreshRuns);
 byId("build-samplesheet").addEventListener("click", buildSamplesheet);
 byId("browse-pipelines").addEventListener("click", openPipelineBrowser);
-byId("close-browser").addEventListener("click", () => {
-  byId("pipeline-browser").classList.add("hidden");
-});
+byId("close-browser").addEventListener("click", closePipelineBrowser);
 byId("pipeline-browser").addEventListener("click", (event) => {
   // Clicking the backdrop dismisses, clicking the panel does not.
-  if (event.target === byId("pipeline-browser")) {
-    byId("pipeline-browser").classList.add("hidden");
-  }
+  if (event.target === byId("pipeline-browser")) closePipelineBrowser();
 });
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") byId("pipeline-browser").classList.add("hidden");
+byId("pipeline-browser").addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closePipelineBrowser();
+    return;
+  }
+  if (event.key !== "Tab") return;
+  // A dialog that does not hold Tab lets the keyboard wander into the form
+  // behind it, which is still there and still focusable.
+  const stops = focusableWithin(byId("pipeline-browser"));
+  if (!stops.length) return;
+  const edge = event.shiftKey ? stops[0] : stops[stops.length - 1];
+  if (document.activeElement !== edge) return;
+  event.preventDefault();
+  (event.shiftKey ? stops[stops.length - 1] : stops[0]).focus();
 });
 
 window.helixsh.onJobEvent((event) => {
@@ -303,11 +394,14 @@ window.helixsh.onJobEvent((event) => {
       unknown ? "Ended" : succeeded ? "Completed" : "Stopped",
       unknown ? "error" : succeeded ? "ok" : "error",
     );
-    notice.textContent = unknown
-      ? "The run ended while Helixsh was not attached, so its exit status is unknown. The log above is complete."
-      : succeeded
-        ? "Pipeline completed successfully."
-        : `Pipeline exited with code ${event.code}${event.signal ? ` (${event.signal})` : ""}.`;
+    setNotice(
+      unknown
+        ? "The run ended while Helixsh was not attached, so its exit status is unknown. The log above is complete."
+        : succeeded
+          ? "Pipeline completed successfully."
+          : `Pipeline exited with code ${event.code}${event.signal ? ` (${event.signal})` : ""}.`,
+      unknown || !succeeded ? "problem" : "",
+    );
     appendConsole(`\n[desktop] run ended${unknown ? "" : ` with code ${event.code}`}\n`);
     if (event.runId === activeRunId) activeRunId = "";
     byId("cancel").classList.add("hidden");
@@ -390,7 +484,7 @@ async function openRun(run) {
       await window.helixsh.closeRun(viewedRunId);
     }
     viewedRunId = run.runId;
-    consoleElement.textContent = "";
+    clearConsole();
     const opened = await window.helixsh.openRun(run.runId);
     appendConsole(`[desktop] ${opened.command}\n\n`);
     if (opened.log) appendConsole(opened.log);
@@ -398,15 +492,16 @@ async function openRun(run) {
       opened.status === "running" ? "Running" : opened.status,
       RUN_STATE_CLASS[opened.status] || "idle",
     );
-    notice.textContent =
+    setNotice(
       opened.status === "running"
         ? "Following a run that is still going."
-        : `Run from ${describeWhen(opened.startedAt)}.`;
+        : `Run from ${describeWhen(opened.startedAt)}.`,
+    );
     byId("cancel").classList.toggle("hidden", opened.status !== "running");
     await refreshRuns();
     await showResults(opened);
   } catch (error) {
-    notice.textContent = error.message;
+    setNotice(error.message, "problem");
   }
 }
 
@@ -486,19 +581,46 @@ async function validateChosenSamplesheet() {
 
 // ── pipeline browser ──────────────────────────────────────────────────────
 
+/** Every stop the keyboard can reach inside `container`, in tab order. */
+function focusableWithin(container) {
+  return [
+    ...container.querySelectorAll('button, [href], input, select, [tabindex]:not([tabindex="-1"])'),
+  ].filter((element) => !element.disabled && element.offsetParent !== null);
+}
+
+function closePipelineBrowser() {
+  const dialog = byId("pipeline-browser");
+  if (dialog.classList.contains("hidden")) return;
+  dialog.classList.add("hidden");
+  // Send the keyboard back where it came from rather than to the top of the
+  // document, which is where dismissing the dialog used to leave it.
+  browserOpener?.focus();
+  browserOpener = null;
+}
+
 async function openPipelineBrowser() {
   const dialog = byId("pipeline-browser");
   const list = byId("pipeline-list");
+  browserOpener = document.activeElement;
   list.replaceChildren();
   dialog.classList.remove("hidden");
+  byId("close-browser").focus();
 
   let pipelines = [];
   try {
     pipelines = await window.helixsh.pipelines();
   } catch (error) {
     const failed = document.createElement("li");
+    failed.className = "pipeline-empty";
     failed.textContent = error.message;
     list.append(failed);
+    return;
+  }
+  if (!pipelines.length) {
+    const empty = document.createElement("li");
+    empty.className = "pipeline-empty";
+    empty.textContent = "No pipelines were returned by the registry.";
+    list.append(empty);
     return;
   }
 
@@ -528,7 +650,7 @@ async function openPipelineBrowser() {
       // instead of tracking whatever the pipeline's default branch becomes.
       if (pipeline.latest) byId("revision").value = pipeline.latest;
       plannedFingerprint = "";
-      dialog.classList.add("hidden");
+      closePipelineBrowser();
       validateChosenSamplesheet();
     });
     item.append(button);
@@ -594,8 +716,17 @@ function renderProcesses(trace) {
   const section = group("Resource use by process");
   const table = document.createElement("table");
   table.className = "process-table";
-  table.innerHTML =
-    "<thead><tr><th>Process</th><th>Tasks</th><th>Slowest</th><th>Peak memory</th></tr></thead>";
+  const head = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  for (const label of ["Process", "Tasks", "Slowest", "Peak memory"]) {
+    const cell = document.createElement("th");
+    // Without a scope a screen reader cannot tie "2.0 GB" to "Peak memory".
+    cell.scope = "col";
+    cell.textContent = label;
+    headRow.append(cell);
+  }
+  head.append(headRow);
+  table.append(head);
   const body = document.createElement("tbody");
   for (const item of trace.processes || []) {
     const row = document.createElement("tr");
@@ -676,6 +807,7 @@ function renderOutputs(results) {
   for (const file of results.outputs.slice(0, 200)) {
     const item = document.createElement("li");
     const name = document.createElement("span");
+    name.className = "output-name";
     name.textContent = file.relative;
     const size = document.createElement("span");
     size.className = "output-size";
@@ -730,5 +862,36 @@ async function showResults(run) {
   }
 }
 
+// ── theme ─────────────────────────────────────────────────────────────────
+
+/**
+ * Wire the switcher to the theme already painted by theme.js.
+ *
+ * The preference is stored by the main process rather than in the renderer:
+ * it has to be readable before the window loads, so the window can be created
+ * with a matching background colour instead of flashing the default one.
+ */
+async function setUpTheme() {
+  const select = byId("theme");
+  let choice = window.helixshTheme.choice();
+  try {
+    const settings = await window.helixsh.getSettings();
+    choice = window.helixshTheme.apply(settings.theme);
+  } catch (error) {
+    // A theme is not worth failing the window over: keep what is painted.
+    appendConsole(`${error.message}\n`, "stderr");
+  }
+  select.value = choice;
+  select.addEventListener("change", async () => {
+    const applied = window.helixshTheme.apply(select.value);
+    try {
+      await window.helixsh.setTheme(applied);
+    } catch (error) {
+      appendConsole(`${error.message}\n`, "stderr");
+    }
+  });
+}
+
+setUpTheme();
 loadCapabilities();
 refreshRuns();
