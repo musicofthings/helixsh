@@ -11,7 +11,7 @@
   $: rc = ROLE_COLORS[$role] ?? "var(--muted)";
 </script>
 
-<div class="statusbar">
+<footer class="statusbar">
   <span class="seg role" style="color:{rc}">
     ⬡ {$role}
   </span>
@@ -27,7 +27,7 @@
   <span class="spacer"></span>
 
   <span class="seg path" title={$helixshPath}>{$helixshPath}</span>
-</div>
+</footer>
 
 <style>
   .statusbar {

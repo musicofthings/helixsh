@@ -162,7 +162,7 @@
   }
 </script>
 
-<div class="bar-wrap">
+<section class="bar-wrap" aria-label="Command input">
   {#if showSuggestions}
     <div class="suggestions">
       {#each suggestions.slice(0, 8) as s}
@@ -208,8 +208,7 @@
     <!-- Submit -->
     <button class="submit-btn" on:click={submit} title="Run (Enter)">▶</button>
   </div>
-</div>
-
+</section>
 <style>
   .bar-wrap {
     position: relative;

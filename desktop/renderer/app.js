@@ -126,8 +126,13 @@ async function loadCapabilities() {
     for (const item of capabilities.filter((entry) => highlighted.has(entry.name))) {
       const chip = document.createElement("span");
       chip.className = `status-chip ${item.state === "ok" ? "ok" : "missing"}`;
-      chip.textContent = `${item.name} ${item.state === "ok" ? "ready" : "unavailable"}`;
+      const state = item.state === "ok" ? "ready" : "unavailable";
+      chip.textContent = `${item.name} ${state}`;
+      // `title` is a mouse affordance: it never reaches a keyboard or a screen
+      // reader reliably, and the detail is the useful half -- which version, or
+      // why the runtime is not there.
       chip.title = item.details;
+      chip.setAttribute("aria-label", `${item.name} ${state}: ${item.details}`);
       container.appendChild(chip);
     }
     showCredentialsNote(byId("runtime").value);
@@ -680,10 +685,19 @@ function formatDuration(seconds) {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
+/** The results panel's own status line, which also reports its failures. */
+function setResultsNote(text, kind = "") {
+  const note = byId("results-note");
+  note.className = kind;
+  note.textContent = text;
+}
+
 function group(title) {
   const section = document.createElement("div");
   section.className = "results-group";
-  const heading = document.createElement("h4");
+  // h3, not h4: the panel's own heading is the h2 above it, and skipping a
+  // level leaves a screen reader's heading outline with a hole in it.
+  const heading = document.createElement("h3");
   heading.textContent = title;
   section.append(heading);
   return section;
@@ -703,7 +717,7 @@ function renderReports(reports, runId) {
       try {
         await window.helixsh.openResult(runId, report.path);
       } catch (error) {
-        byId("results-note").textContent = error.message;
+        setResultsNote(error.message, "problem");
       }
     });
     row.append(button);
@@ -771,7 +785,7 @@ function renderFailures(failures) {
     const card = document.createElement("div");
     card.className = "failure";
 
-    const title = document.createElement("h5");
+    const title = document.createElement("h4");
     title.textContent = failure.process || "Unknown process";
     card.append(title);
 
@@ -822,9 +836,8 @@ function renderOutputs(results) {
 async function showResults(run) {
   const panel = byId("results");
   const body = byId("results-body");
-  const note = byId("results-note");
   body.replaceChildren();
-  note.textContent = "";
+  setResultsNote("");
 
   if (run.status === "running") {
     // Outputs are still being written; showing a half-finished tree would
@@ -838,7 +851,7 @@ async function showResults(run) {
     results = await window.helixsh.runResults(run.runId);
   } catch (error) {
     panel.classList.remove("hidden");
-    note.textContent = error.message;
+    setResultsNote(error.message, "problem");
     return;
   }
   panel.classList.remove("hidden");
@@ -858,7 +871,7 @@ async function showResults(run) {
       : "This run recorded no output directory.";
     body.append(empty);
   } else if (results.truncated) {
-    note.textContent = "Output listing truncated.";
+    setResultsNote("Output listing truncated.");
   }
 }
 

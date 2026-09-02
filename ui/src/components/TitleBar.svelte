@@ -9,7 +9,7 @@
 
 <!-- Dragging is handled by CSS -webkit-app-region: drag on .titlebar -->
 <!-- svelte-ignore a11y-no-static-element-interactions -->
-<div class="titlebar">
+<header class="titlebar">
   <div class="left">
     <span class="logo">⬡ helixsh</span>
   </div>
@@ -26,7 +26,7 @@
     <button class="ctrl minimize" on:click={() => action("minimize")} title="Minimize" aria-label="Minimize"></button>
     <button class="ctrl maximize" on:click={() => action("maximize")} title="Maximize" aria-label="Maximize"></button>
   </div>
-</div>
+</header>
 
 <style>
   .titlebar {

@@ -10,7 +10,7 @@
   });
 </script>
 
-<div class="main-area">
+<main class="main-area">
   <div class="blocks-scroll" bind:this={scrollEl}>
     {#if $blocks.length === 0}
       <div class="welcome">
@@ -31,8 +31,7 @@
     {/if}
   </div>
   <CommandBar />
-</div>
-
+</main>
 <style>
   .main-area {
     display: flex;

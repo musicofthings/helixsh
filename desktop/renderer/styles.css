@@ -953,11 +953,17 @@ summary:hover {
   color: var(--text-subtle);
 }
 
+/* A failure to read a run's outputs is not a footnote. */
+#results-note.problem {
+  color: var(--danger);
+  font-weight: 650;
+}
+
 .results-group {
   margin-bottom: 0.9rem;
 }
 
-.results-group h4 {
+.results-group h3 {
   margin: 0 0 0.4rem;
   font-size: 0.72rem;
   font-weight: 700;
@@ -1032,7 +1038,7 @@ summary:hover {
   background: var(--danger-quiet);
 }
 
-.failure h5 {
+.failure h4 {
   margin: 0 0 0.3rem;
   font-size: 0.82rem;
   color: var(--danger);
