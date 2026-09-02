@@ -74,3 +74,30 @@ def test_the_answer_includes_where_a_cloud_run_would_get_its_credentials(monkeyp
 
     assert "aws-credentials" in names
     assert "google-credentials" in names
+
+
+def test_run_check_survives_a_path_entry_it_cannot_read(monkeypatch):
+    """A PATH entry the user cannot read must not take down every other check.
+
+    `execvp` reports EACCES rather than ENOENT when it cannot even look inside
+    a directory on PATH -- a root-owned `~/.local/bin`, a stale mount -- which
+    is a PermissionError, not a FileNotFoundError.
+    """
+
+    def refuse(*_args, **_kwargs):
+        raise PermissionError(13, "Permission denied", "nextflow")
+
+    monkeypatch.setattr(subprocess, "run", refuse)
+    result = run_check("nextflow", ["nextflow", "-version"])
+    assert result.state == "missing"
+    assert "Permission denied" in result.details
+
+
+def test_collect_doctor_results_is_not_stopped_by_one_unrunnable_check(monkeypatch):
+    def refuse(*_args, **_kwargs):
+        raise PermissionError(13, "Permission denied", "nextflow")
+
+    monkeypatch.setattr(subprocess, "run", refuse)
+    results = collect_doctor_results()
+    assert results, "the doctor returned nothing at all"
+    assert all(item.state == "missing" for item in results if item.name == "nextflow")

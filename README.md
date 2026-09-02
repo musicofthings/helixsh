@@ -1218,13 +1218,16 @@ to run anywhere.
 
 ## Project Health (as of 2026-09-01)
 
-- Python test suite: **311 passed** (`python3 -m pytest -q`).
-- Electron boundary suite: **49 passed** (`npm run desktop:test`).
+- Python test suite: **313 passed** (`python3 -m pytest -q`).
+- Electron boundary suite: **58 passed** (`npm run desktop:test`).
 - Real-execution integration tier: **4 passed** (`pytest -m integration`).
 - Desktop GUI eval batteries: **59 checks passed** across the four scripts in
   `.claude/skills/run-desktop/`, driving the running app rather than mocking it
   — 28 plan and guardrail checks, 9 on run survival, 10 on results, 12 on the
   FASTQ-to-run path.
+- Theme behaviour in the running app: **12 checks passed** — the default
+  following the OS, live repainting, the choice surviving a restart, and the
+  window's own background colour matching the stored theme at launch.
 - Bytecode compile check: **pass** (`python -m compileall -q src`).
 - Electron dependency audit: **0 vulnerabilities** (`npm audit`).
 - Tauri/Svelte production build: **pass** (`npm run build` in `ui/`), and the

@@ -55,6 +55,13 @@ def run_check(name: str, command: list[str]) -> CheckResult:
         )
     except FileNotFoundError:
         return CheckResult(name=name, state="missing", details="binary not found")
+    except OSError as error:
+        # Anything else the exec itself can fail with, most often EACCES: a
+        # directory on PATH the user cannot read makes execvp report a
+        # permission error rather than a missing file. Unhandled, one such
+        # entry took down the whole doctor run -- every other check with it --
+        # and the desktop app reported the backend as unavailable.
+        return CheckResult(name=name, state="missing", details=f"could not be run: {error.strerror}")
     except subprocess.TimeoutExpired:
         # A timeout is not the same as an absent binary: the tool is installed
         # but unresponsive, which points at a different fix.

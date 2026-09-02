@@ -99,4 +99,5 @@ jobs:
           node --check desktop/main.cjs
           node --check desktop/preload.cjs
           node --check desktop/renderer/app.js
+          node --check desktop/renderer/theme.js
           node --check scripts/package_desktop.cjs
